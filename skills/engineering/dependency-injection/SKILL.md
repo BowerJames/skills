@@ -40,3 +40,4 @@ This is the testability rule "accept dependencies, don't create them" applied at
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
 - [python.md](python.md) — Protocols and Callables as dependency types, seams declared in `__init__` signatures, pytest fixtures wiring the graph, Python gotchas
+- [typescript.md](typescript.md) — interfaces and function types as dependency types, seams declared in factory signatures, object-literal fakes wiring the graph, TypeScript gotchas
