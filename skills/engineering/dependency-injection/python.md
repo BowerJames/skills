@@ -57,24 +57,6 @@ A module-level function with a typed parameter is already seam-declaring DI — 
 def processOrder(order: Order, gateway: PaymentGateway) -> Receipt: ...
 ```
 
-## Wiring happens in `main()`
-
-Wire the graph in `main()` (or `if __name__ == "__main__":`), invoked from the entry point. Frameworks: the startup hook is where wiring belongs.
-
-- **Import purity**: importing a module wires nothing. No `gateway = StripeGateway(KEY)` at module top level — that is construction at import time: hidden, order-dependent, untestable.
-- **`os.environ` is a Resource**: read it in `main()`, pass the values in as plain typed parameters.
-
-## Data carriers are frozen dataclasses
-
-Data crossing interfaces — values, entities, messages — are frozen dataclasses: created anywhere, cheap, immutable, never taking dependencies.
-
-```python
-@dataclass(frozen=True)
-class Order:
-    cart: Cart
-    placed_at: datetime
-```
-
 ## Testing: fixtures wire the graph
 
 A pytest fixture that assembles the graph with fakes is the test doing its own wiring — the same discipline at test scope. A fake is a small class satisfying the Protocol; a seam needs no mock library. `monkeypatch` is a service locator for tests: injecting a fake at the seam beats patching a global every time.
