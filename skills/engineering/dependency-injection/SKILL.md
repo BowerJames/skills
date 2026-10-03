@@ -3,11 +3,11 @@ name: dependency-injection
 description: Discipline for wiring modules together. Covers coding against interfaces, constructor injection, pure constructors, and the injectables/creatables split. Use when wiring dependencies, structuring constructors, designing module graphs, or fixing modules that create or fetch what they need.
 ---
 
-# Dependency Injection
-
-## Prerequisites
+# Prerequisites
 
 - **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (module, interface, implementation, seam, adapter, resource) exactly.
+
+# Dependency Injection
 
 Dependency injection is passing a module its dependencies instead of letting it create or fetch them: a module receives **Adapters** across its **Seams** rather than reaching for **Resources** itself. The aim is that every resource sits behind a seam, every seam is declared in the **Interface**, and construction stays pure.
 
