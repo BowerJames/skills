@@ -1,6 +1,6 @@
 ---
 name: factory-pattern
-description: Construction wrapped behind an interface. Use when creation needs to vary (which adapter, which configuration, per-request data), when binding runtime data to dependencies, or when deciding where a module gets built.
+description: Construction wrapped behind an interface. Use when creation needs to vary (which adapter, which configuration, per-request data), when binding runtime data to dependencies, or when deciding where a module gets built. Requires the codebase-design and dependency-injection skills.
 ---
 
 # Prerequisites

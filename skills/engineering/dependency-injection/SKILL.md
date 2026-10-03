@@ -1,6 +1,6 @@
 ---
 name: dependency-injection
-description: Discipline for wiring modules together. Covers coding against interfaces and declaring seams at construction. Use when wiring dependencies, structuring initialisation, or fixing modules that create or fetch what they need.
+description: Discipline for wiring modules together. Covers coding against interfaces and declaring seams at construction. Use when wiring dependencies, structuring initialisation, or fixing modules that create or fetch what they need. Requires the codebase-design skill.
 ---
 
 # Prerequisites
