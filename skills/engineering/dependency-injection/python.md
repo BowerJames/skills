@@ -23,7 +23,7 @@ The `__init__` signature (or the function signature) is where the interface decl
 
 ```python
 class StripeGateway(PaymentGateway):
-    def __init__(self, api_key: str, requester):
+    def __init__(self, api_key: str, requester): # Construction for the stripe gateway module includes the requester seam
         ...
 
     def charge(self, amount: float) -> bool: # Only data passed to the methods of the module, not seams
@@ -31,9 +31,6 @@ class StripeGateway(PaymentGateway):
 
     def refund(self, amount: float) -> bool:
         ...
-
-def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Construction for the stripe gateway module includes the requester seam
-    ...
 ```
 
 A module-level global (`gateway = StripeGateway(KEY)`, imported by consumers) is the same dependency fetched instead of declared — Python's ambient service locator.
