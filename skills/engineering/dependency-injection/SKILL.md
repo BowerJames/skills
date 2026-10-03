@@ -1,6 +1,6 @@
 ---
 name: dependency-injection
-description: Discipline for wiring modules together. Covers coding against interfaces, injection at construction, pure construction, the injectables/creatables split, and scoped injectables. Use when wiring dependencies, structuring initialisation, designing module graphs, or fixing modules that create or fetch what they need.
+description: Discipline for wiring modules together. Covers coding against interfaces, declaring seams at construction, pure construction, the injectables/creatables split, and scoped injectables. Use when wiring dependencies, structuring initialisation, designing module graphs, or fixing modules that create or fetch what they need.
 ---
 
 # Prerequisites
@@ -64,7 +64,7 @@ def processOrder(order, gateway: PaymentGateway):
 
 The interface belongs to the consumer: declare the operations the caller needs, which is often a subset of the adapter's full surface. A consumer forced to see `refund` when it only ever charges is seeing someone else's interface.
 
-### 2. Inject at construction
+### 2. Declare seams at construction
 
 The seam must be visible in the module's interface, and construction is where the interface declares it. A dependency in the signature is a fact every caller and test can see and must satisfy; a dependency fetched inside the body is a hidden resource — present in behaviour, absent from the interface.
 
