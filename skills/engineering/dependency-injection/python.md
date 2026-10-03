@@ -1,6 +1,42 @@
 # Dependency Injection in Python
 
-The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocols and Callables as interfaces, the three shapes of a seam — live in [codebase-design's python.md](../codebase-design/python.md).
+The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [codebase-design's python.md](../codebase-design/python.md).
+
+## Rule 1: code against interfaces
+
+Type dependencies as Protocols (for classes) or Callables (for functions), never as concrete classes:
+
+```python
+# Coupled: no seam — the caller is welded to one adapter
+def processOrder(order, gateway: StripeGateway):
+    ...
+
+# Decoupled: PaymentGateway is the interface at the seam
+# Any adapter — Stripe in production, a fake in tests — can satisfy it
+def processOrder(order, gateway: PaymentGateway):
+    ...
+```
+
+## Rule 2: declare seams at construction
+
+The `__init__` signature (or the function signature) is where the interface declares the seam; the methods take only data:
+
+```python
+class StripeGateway(PaymentGateway):
+    def __init__(self, api_key: str, requester):
+        ...
+
+    def charge(self, amount: float) -> bool: # Only data passed to the methods of the module, not seams
+        ...
+
+    def refund(self, amount: float) -> bool:
+        ...
+
+def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Construction for the stripe gateway module includes the requester seam
+    ...
+```
+
+A module-level global (`gateway = StripeGateway(KEY)`, imported by consumers) is the same dependency fetched instead of declared — Python's ambient service locator.
 
 ## Testing: fixtures wire the graph
 

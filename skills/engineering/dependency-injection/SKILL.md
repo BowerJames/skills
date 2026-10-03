@@ -23,31 +23,6 @@ Use these terms exactly. The prerequisite terms (module, interface, implementati
 
 Declare a dependency's type as an **Interface**, not a concrete class. The concrete thing is an **Adapter**; the seam exists only where the interface is declared.
 
-```python
-class PaymentGateway(Protocol):  # the interface at the seam
-    def charge(self, amount: float) -> bool:
-        ...
-
-class StripeGateway(PaymentGateway):  # an adapter satisfying it
-    def __init__(self, api_key: str, requester):
-        ...
-
-    def charge(self, amount: float) -> bool:  # what processOrder needs
-        ...
-
-    def refund(self, amount: float) -> bool:  # part of the adapter's full surface,
-        ...                                   # invisible at the seam
-
-# Coupled: no seam — the caller is welded to one adapter
-def processOrder(order, gateway: StripeGateway):
-    ...
-
-# Decoupled: PaymentGateway is the interface at the seam
-# Any adapter — Stripe in production, a fake in tests — can satisfy it
-def processOrder(order, gateway: PaymentGateway):
-    ...
-```
-
 The interface belongs to the consumer: declare the operations the caller needs, which is often a subset of the adapter's full surface. A consumer forced to see `refund` when it only ever charges is seeing someone else's interface.
 
 ### 2. Declare seams at construction
@@ -60,23 +35,8 @@ The seam must be visible in the module's interface, and construction is where th
 
 This is the testability rule "accept dependencies, don't create them" applied at the level of the signature. Construction is partial application: bind the behaviour, and what remains is a stable function from data to results.
 
-```python
-class StripeGateway(PaymentGateway):
-    def __init__(self, api_key: str, requester):
-        ...
-
-    def charge(self, amount: float) -> bool: # Only data passed to the methods of the module not seams
-        ...
-
-    def refund(self, amount: float) -> bool:
-        ... 
-
-def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Construction for the stripe gateway module includes the requester seam
-    ...
-```
-
 ## Language idioms
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — pytest fixtures wiring the graph, and Python gotchas; the vocabulary's Python shapes live in codebase-design's [python.md](../codebase-design/python.md)
+- [python.md](python.md) — Protocols and Callables as dependency types, seams declared in `__init__` signatures, pytest fixtures wiring the graph, Python gotchas
