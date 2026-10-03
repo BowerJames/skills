@@ -103,3 +103,4 @@ Good interfaces make testing natural:
 The vocabulary above is language-agnostic. When implementing, read the file for the target language:
 
 - [python.md](python.md) — Protocols and Callables as interfaces, the three shapes of a seam, adapters at seams, testability idioms
+- [typescript.md](typescript.md) — no classes: factory functions returning interface-satisfying object literals, the three shapes of a seam, adapters at seams, testability idioms
