@@ -23,11 +23,15 @@ _Avoid_: API, signature (too narrow — they refer only to the type-level surfac
 
 **Depth** — leverage at the interface: the amount of behaviour a caller (or test) can exercise per unit of interface they have to learn. A module is **deep** when a large amount of behaviour sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.
 
-**Seam** _(Michael Feathers)_ — a place where you can alter the behaviour of a module without editing the implementation of the module. Where to put the seam is its own design decision, but it must be part of the interface of the module.
+**Seam** _(Michael Feathers)_ — a place where you can alter the behaviour of a module without editing the implementation of the module. Where to put the seam is its own design decision, but it must live in the interface of the module.
 
 _Avoid_: boundary (overloaded with DDD's bounded context).
 
 **Adapter** — a concrete thing that satisfies an interface at a seam. The interface the adapter satisfies can be a subset of the full interface of the thing.
+
+**Resource** — anything a module uses that exists outside its implementation and outside a test's control: the filesystem, the network, the clock, randomness, environment variables, a database. A test cannot decide the outcome of an interaction with a resource, so behaviour that crosses one must be tested by substituting it — a resource is reached through a **Seam**, satisfied by the real **Adapter** in production and a test adapter (fake or mock) in tests.
+
+_Avoid_: dependency (every import is one; most need no mocking), external service (time isn't a service), side effect (describes the crossing, not the thing), boundary (rejected above).
 
 **Leverage** — what callers get from depth: more capability per unit of interface they learn. One implementation pays back across N call sites and M tests.
 
@@ -64,10 +68,11 @@ When designing an interface, ask:
 - Can I reduce the number of methods?
 - Can I simplify the parameters?
 - Can I hide more complexity inside?
+- Can I add sensible defaults?
 
 ## Principles
 
-- **Depth is a property of the interface, not the implementation.** A deep module can be internally composed of small, mockable, swappable parts controlled via seams.
+- **Depth is a property of the interface, not the implementation.** A deep module can be internally composed of small, mockable, swappable parts controlled via seams in its interface.
 - **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
 - **A module's interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape and should be reconsidered.
 - **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.
