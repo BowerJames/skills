@@ -11,7 +11,25 @@ description: Discipline for wiring modules together. Covers coding against inter
 
 Dependency injection is passing a module its dependencies instead of letting it create or fetch them: a module receives **Adapters** across its **Seams** rather than reaching for **Resources** itself. The aim is that every resource sits behind a seam, every seam is declared in the **Interface**, and construction stays pure.
 
-**Construction** is the act of assembling a module so it is ready for use: a class constructor, a factory function, or simply entering a function. **Use** is the phase where the assembled module does its work. Construction wires; use works.
+## Glossary
+
+Use these terms exactly. The prerequisite terms (module, interface, implementation, seam, adapter, resource) are defined in [codebase-design](../codebase-design/SKILL.md); these are this skill's own.
+
+**Construction** — the act of assembling a module so it is ready for use: a class constructor, a factory function, or simply entering a function.
+
+**Use** — the phase where the assembled module does its work. Construction wires; use works.
+
+**Injectable** — a module whose job is behaviour: it wraps a **Resource** or composes other injectables, sits at a **Seam**, is created once per **Scope**, and lives for that scope's span. It carries no per-call state.
+
+_Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
+
+**Creatable** — a module whose job is data: a value, entity, message, or DTO. Created anywhere it's needed, cheaply and often, short-lived, holding state and identity. Creatables cross interfaces as parameters and returns; they never sit at seams.
+
+_Avoid_: model (overloaded), data bag (a creatable may have behaviour over its own data — that's allowed).
+
+**Scope** — the span over which an injectable is shared: the runtime, a request, a session, an entity. Each scope composes its injectables once, at its boundary. The runtime's scope is composed at the **composition root**; narrower scopes compose where their runtime data arrives.
+
+**Composition point** — the only place in its scope that knows the concretes: where that scope's graph is assembled and its seams satisfied. The **composition root** is the widest composition point, near `main`; narrower ones sit at scope boundaries.
 
 ## Rules
 
@@ -68,15 +86,7 @@ Pure construction buys three things:
 
 ### 4. Separate injectables from creatables
 
-**Injectable** — a module whose job is behaviour: it wraps a **Resource** or composes other injectables, sits at a **Seam**, is created once per **Scope**, and lives for that scope's span. It carries no per-call state.
-
-_Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
-
-**Creatable** — a module whose job is data: a value, entity, message, or DTO. Created anywhere it's needed, cheaply and often, short-lived, holding state and identity. Creatables cross interfaces as parameters and returns; they never sit at seams.
-
-_Avoid_: model (overloaded), data bag (a creatable may have behaviour over its own data — that's allowed).
-
-**Scope** — the span over which an injectable is shared: the runtime, a request, a session, an entity. Each scope composes its injectables once, at its boundary. The runtime's scope is composed at the **composition root**; narrower scopes compose where their runtime data arrives.
+Every module is an injectable or a creatable, and the two never swap roles.
 
 Rules of the split:
 
@@ -89,7 +99,7 @@ When they mix, both rot: a creatable that takes injectables becomes a service-in
 
 ## Composition points
 
-The **composition root** is the widest **composition point**: the single module, near `main`, where the runtime's object graph is assembled. Every concrete adapter is created here, and every seam is satisfied here. It is the only code that knows all the concretes; everything downstream sees interfaces.
+The composition root, near `main`, assembles the runtime's graph: every concrete adapter is created there, and every seam is satisfied there. It is the only code that knows all the concretes; everything downstream sees interfaces.
 
 ```python
 def main():
@@ -109,7 +119,7 @@ class OrderService:                            # an injectable: construction onl
         return order if self.gateway.charge(order.total) else ...
 ```
 
-A **composition point** is the same thing at any scale: the only place in its scope that knows the concretes. Narrower scopes compose at their boundaries, where runtime data arrives:
+A narrower scope composes at its boundary, where runtime data arrives:
 
 ```python
 class EntityEndpoints:                                # root-scoped
