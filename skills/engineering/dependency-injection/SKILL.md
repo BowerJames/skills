@@ -71,6 +71,6 @@ class StripeGateway(PaymentGateway):
     def refund(self, amount: float) -> bool:
         ... 
 
-def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Constructon for the stripe gateway module includes the api_key and requester seams
+def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Construction for the stripe gateway module includes the requester seam
     ...
 ```
