@@ -18,6 +18,20 @@ Dependency injection is passing a module its dependencies instead of letting it 
 Declare a dependency's type as an **Interface**, not a concrete class. The concrete thing is an **Adapter**; the seam exists only where the interface is declared.
 
 ```python
+class PaymentGateway(Protocol):  # the interface at the seam
+    def charge(self, amount: float) -> bool:
+        ...
+
+class StripeGateway(PaymentGateway):  # an adapter satisfying it
+    def __init__(self, api_key: str, requester):
+        ...
+
+    def charge(self, amount: float) -> bool:  # what processOrder needs
+        ...
+
+    def refund(self, amount: float) -> bool:  # part of the adapter's full surface,
+        ...                                   # invisible at the seam
+
 # Coupled: no seam — the caller is welded to one adapter
 def processOrder(order, gateway: StripeGateway):
     ...
