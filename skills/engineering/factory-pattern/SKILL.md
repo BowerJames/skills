@@ -71,3 +71,4 @@ The GoF shapes are this skill's one discipline at different scales:
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
 - [python.md](python.md) — `create_x` factory functions, `Callable`-typed factories bound with `functools.partial` or closures, lambda fakes in tests
+- [typescript.md](typescript.md) — `createX` factory functions, function-typed factories bound with arrow closures, arrow fakes in tests
