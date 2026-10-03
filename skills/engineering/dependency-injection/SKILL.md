@@ -19,13 +19,13 @@ Use these terms exactly. The prerequisite terms (module, interface, implementati
 
 **Use** — the phase where the assembled module does its work. Construction wires; use works.
 
-**Injectable** — a module whose job is behaviour: it wraps a **Resource** or composes other injectables, sits at a **Seam**, is created once per **Scope**, and lives for that scope's span. It carries no per-call state.
+**Injectable** — a module provided at construction to configure behaviour: it decides *how* the module works — which **Adapter** satisfies each **Seam**, which **Resource** is reached, which policy applies. It wraps a resource or composes other injectables, is bound once per **Scope**, never varies between calls, and carries no per-call state.
 
 _Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
 
-**Creatable** — a module whose job is data: a value, entity, message, or DTO. Created anywhere it's needed, cheaply and often, short-lived, holding state and identity. Creatables cross interfaces as parameters and returns; they never sit at seams.
+**Creatable** — a module passed via parameters to carry data: it decides *what* the module works on. Data varies per call, so creatables cross interfaces as parameters and returns, never sitting at seams — created anywhere, cheaply, short-lived, holding state and identity. Their behaviour, if any, is pure: answers about themselves, touching no resource.
 
-_Avoid_: model (overloaded), data bag (a creatable may have behaviour over its own data — that's allowed).
+_Avoid_: model (overloaded), data bag.
 
 **Scope** — the span over which an injectable is shared: the runtime, a request, a session, an entity. Each scope composes its injectables once, at its boundary. The runtime's scope is composed at the **composition root**; narrower scopes compose where their runtime data arrives.
 
@@ -72,7 +72,7 @@ The seam must be visible in the module's interface, and construction is where th
 - **Service locator** (asking a global registry or container for dependencies) removes the seam from the interface entirely: the module works only when the ambient world is arranged just so. Injection inverts this — dependencies arrive; the module never fetches.
 - **Setter injection** half-hides it: the module exists in an unready state until some caller remembers the setter. The interface lies about what is required.
 
-This is the testability rule "accept dependencies, don't create them" applied at the level of the signature.
+This is the testability rule "accept dependencies, don't create them" applied at the level of the signature. Construction is partial application: bind the injectables, and what remains is a stable function from creatables to results.
 
 ### 3. Keep construction pure and side-effect free
 
@@ -86,16 +86,18 @@ Pure construction buys three things:
 
 ### 4. Separate injectables from creatables
 
-Every module is an injectable or a creatable, and the two never swap roles.
+Every module is an injectable or a creatable, and the two never swap roles: injectables are provided at construction to configure behaviour; creatables are passed via parameters to carry data.
 
 Rules of the split:
 
 - Injectables may depend on injectables. Creatables may hold only data, and other creatables.
 - Never inject a creatable. It's data: create it, or receive it as a method argument.
+- A parameter that never varies between calls is an injectable that missed construction: promote it.
+- A dependency that varies per call is a creatable at this scope: demote it to a parameter, or open a narrower scope and bind it there.
 - Never create an injectable inside a working method. Creation at a scope's boundary is composition: the boundary declares the runtime data it needs, wires the scope's graph from that data plus wider-scoped adapters, and then may use what it composed. Creation inside a working method hides the resource behind an ordinary call.
 - Respect scope direction: an injectable may depend only on injectables of the same or wider scope. A wider module holding a narrower one is a captive — it outlives its data, and every later request sees the first entity's config.
 
-When they mix, both rot: a creatable that takes injectables becomes a service-in-disguise, dragging its dependencies through every construction site; an injectable holding mutable per-call state becomes untestable. The test question: does it exist to hold data, or to do work over resources?
+When they mix, both rot: a creatable that takes injectables becomes a service-in-disguise, dragging its dependencies through every construction site; an injectable holding mutable per-call state becomes untestable. The test question: does it decide how the module behaves (an injectable — provide it at construction), or what the module works on (a creatable — pass it as a parameter)?
 
 ## Composition points
 
