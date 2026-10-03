@@ -28,37 +28,15 @@ The factory's return type is the **Interface**; the product concrete appears onl
 
 The factory names its products; it never names its ingredients. The choice of product concrete is the factory's *implementation*; the ingredients are its *interface* — adapters, configuration, and data arrive as parameters, never fetched from the body.
 
-```python
-def create_payment_gateway(config: Config, http: Requester) -> PaymentGateway:  # ingredients in the signature
-    if config.use_stripe:
-        return StripeGateway(config.stripe_key, http)   # the concretes named here are the products
-    return PaypalGateway(config.paypal_env, http)
-
-# at a composition point — the ingredient concrete is named where concretes are named
-gateway = create_payment_gateway(config, HttpRequests())  # caller never learns the product concrete
-```
-
 Every concrete has exactly one place it may appear: the composition point names ingredient concretes, the factory names product concretes, and everyone else sees interfaces.
 
 ### 2. Bind runtime data to root-chosen adapters
 
 Construction has two ingredients: dependencies (adapters, chosen at a composition point) and data (values arriving at runtime). When a module needs both, the factory is where they meet — bound at the composition point, called at the boundary where the data arrives.
 
-A factory a module calls is a dependency like any other: it arrives at construction, or the module is welded to one way of building. Bind the root-time ingredient into the factory at construction; the boundary supplies only the runtime data:
+A factory a module calls is a dependency like any other: it arrives at construction, or the module is welded to one way of building. Bind the root-time ingredient into the factory at construction; the boundary supplies only the runtime data.
 
-```python
-# at the composition point: bind the root-chosen ingredient
-loader_factory = lambda eid: create_entity_loader(eid, config_source)
-
-class EntityEndpoints:
-    def __init__(self, loader_factory: Callable[[EntityId], EntityLoader]):
-        self.loader_factory = loader_factory          # the factory is the seam
-
-    def on_get(self, entity_id: EntityId):            # data arrives at the boundary
-        return EntityService(self.loader_factory(entity_id)).handle()
-```
-
-A test injects `lambda eid: FakeLoader(eid)` and controls construction without touching globals. A factory at a boundary may use what it built; it must not cache the product for a wider span than its caller — every later request would see the first entity's config.
+A test injects a fake factory and controls construction without touching globals. A factory at a boundary may use what it built; it must not cache the product for a wider span than its caller — every later request would see the first entity's config.
 
 ### 3. A factory wires; it doesn't work
 
@@ -87,3 +65,9 @@ The GoF shapes are this skill's one discipline at different scales:
 - **"Factories are for complex construction."** Factories are for *varying* construction. Complexity belongs in the built module's implementation, not the builder.
 - **"A factory per class."** Fixed construction needs no factory — build at the composition point. Symmetry is not a reason.
 - **Factory as service locator.** A factory's signature declares its ingredients; a locator hides them in an ambient registry. If callers must arrange a global before calling, it's a locator wearing the name.
+
+## Language idioms
+
+The rules above are language-agnostic. When implementing, read the file for the target language:
+
+- [python.md](python.md) — `create_x` factory functions, `Callable`-typed factories bound with `functools.partial` or closures, lambda fakes in tests
