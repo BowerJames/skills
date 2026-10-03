@@ -79,4 +79,4 @@ def create_stripe_gateway(api_key: str, requester) -> StripeGateway: # Construct
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — Protocol and Callable interfaces, the three shapes of a seam, pytest fixtures
+- [python.md](python.md) — pytest fixtures wiring the graph, and Python gotchas; the vocabulary's Python shapes live in codebase-design's [python.md](../codebase-design/python.md)

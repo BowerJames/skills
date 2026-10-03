@@ -82,55 +82,8 @@ When designing an interface, ask:
 Good interfaces make testing natural:
 
 1. **Accept dependencies, don't create them.**
-
-   ```python
-    # Testable
-    def processOrder(order, paymentGateway: PaymentGateway): # paymentGateway is a seam of the processOrder module
-        ...
-
-    # Hard to test
-    def processOrder(order):
-        gateway = StripeGateway()
-        ...
-   ```
-
 2. **Return results, don't produce side effects.**
-
-   ```python
-    # Testable
-    def calculateDiscount(cart) -> Discount:
-        ...
-
-    # Hard to test
-    def applyDiscount(cart) -> None:
-        cart.total -= discount
-        ...
-   ```
-
 3. **Small surface area.** Fewer methods = fewer tests needed. Fewer params = simpler test setup.
-
-## Adapters and seams
-
-```python
-class PaymentGateway(Protocol): # PaymentGateway is an interface of the processOrder module seam
-    def charge(self, amount: float) -> bool:
-        ...
-
-def processOrder(order, paymentGateway: PaymentGateway):
-    ...
-
-class StripeGateway: # StripeGateway is a module
-    def __init__(self, api_key: str, requester: Callable[[Request], Response]):
-        ...
-
-    def charge(self, amount: float) -> bool:
-        ...
-
-    def refund(self, amount: float) -> bool:
-        ...
-
-processOrder(order, StripeGateway()) # StripeGateway is an adapter satisfying the interface at the processOrder module seam
-```
 
 ## Relationships
 
@@ -144,3 +97,9 @@ processOrder(order, StripeGateway()) # StripeGateway is an adapter satisfying th
 
 - **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.
 - **"Boundary"**: overloaded with DDD's bounded context. Say **seam** or **interface**.
+
+## Language idioms
+
+The vocabulary above is language-agnostic. When implementing, read the file for the target language:
+
+- [python.md](python.md) — Protocols and Callables as interfaces, the three shapes of a seam, adapters at seams, testability idioms
