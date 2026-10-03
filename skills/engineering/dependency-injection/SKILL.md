@@ -1,6 +1,6 @@
 ---
 name: dependency-injection
-description: Discipline for wiring modules together. Covers coding against interfaces, injection at construction, pure construction, and the injectables/creatables split. Use when wiring dependencies, structuring initialisation, designing module graphs, or fixing modules that create or fetch what they need.
+description: Discipline for wiring modules together. Covers coding against interfaces, injection at construction, pure construction, the injectables/creatables split, and scoped injectables. Use when wiring dependencies, structuring initialisation, designing module graphs, or fixing modules that create or fetch what they need.
 ---
 
 # Prerequisites
@@ -68,7 +68,7 @@ Pure construction buys three things:
 
 ### 4. Separate injectables from creatables
 
-**Injectable** — a module whose job is behaviour: it wraps a **Resource** or composes other injectables, sits at a **Seam**, is created once at the **Composition Root**, and lives for the runtime. It carries no per-call state.
+**Injectable** — a module whose job is behaviour: it wraps a **Resource** or composes other injectables, sits at a **Seam**, is created once per **Scope**, and lives for that scope's span. It carries no per-call state.
 
 _Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
 
@@ -76,17 +76,20 @@ _Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
 
 _Avoid_: model (overloaded), data bag (a creatable may have behaviour over its own data — that's allowed).
 
+**Scope** — the span over which an injectable is shared: the runtime, a request, a session, an entity. Each scope composes its injectables once, at its boundary. The runtime's scope is composed at the **composition root**; narrower scopes compose where their runtime data arrives.
+
 Rules of the split:
 
 - Injectables may depend on injectables. Creatables may hold only data, and other creatables.
 - Never inject a creatable. It's data: create it, or receive it as a method argument.
-- Never create an injectable mid-flow. If it touches a resource, it's wired at the composition root; creating it mid-flow hides the resource behind the call.
+- Never create an injectable inside a working method. Creation at a scope's boundary is composition: the boundary declares the runtime data it needs, wires the scope's graph from that data plus wider-scoped adapters, and then may use what it composed. Creation inside a working method hides the resource behind an ordinary call.
+- Respect scope direction: an injectable may depend only on injectables of the same or wider scope. A wider module holding a narrower one is a captive — it outlives its data, and every later request sees the first entity's config.
 
 When they mix, both rot: a creatable that takes injectables becomes a service-in-disguise, dragging its dependencies through every construction site; an injectable holding mutable per-call state becomes untestable. The test question: does it exist to hold data, or to do work over resources?
 
-## Composition root
+## Composition points
 
-The **composition root** is the single module, near `main`, where the object graph is assembled: every concrete adapter is created here, and every seam is satisfied here. It is the only code that knows all the concretes; everything downstream sees interfaces.
+The **composition root** is the widest **composition point**: the single module, near `main`, where the runtime's object graph is assembled. Every concrete adapter is created here, and every seam is satisfied here. It is the only code that knows all the concretes; everything downstream sees interfaces.
 
 ```python
 def main():
@@ -106,13 +109,28 @@ class OrderService:                            # an injectable: construction onl
         return order if self.gateway.charge(order.total) else ...
 ```
 
-One composition root per runtime. A DI framework or container is optional: it only automates this function. The discipline lives in the modules, not the framework.
+A **composition point** is the same thing at any scale: the only place in its scope that knows the concretes. Narrower scopes compose at their boundaries, where runtime data arrives:
+
+```python
+class EntityEndpoints:                                # root-scoped
+    def __init__(self, config_source: ConfigSource):  # adapter, chosen at the root
+        self.config_source = config_source
+
+    def on_get(self, entity_id: EntityId):            # scope boundary: the creatable arrives
+        loader = EntityConfigLoader(entity_id, self.config_source)  # scoped injectable
+        return EntityService(loader).handle()         # compose the scope, then use it
+```
+
+Composition needs two ingredients: dependencies (adapters, chosen at the root) and data (creatables, arriving at runtime). The root has only dependencies; when construction needs runtime data, composition moves to the scope where that data arrives — but the root still chooses the adapters. What crosses a scope boundary is either an already-wired adapter or a factory that binds the runtime data to it.
+
+One composition point per scope. A DI framework or container is optional: it only automates these functions. The discipline lives in the modules, not the framework.
 
 ## Relationships
 
 - A dependency declared in a signature is an **Interface** at a **Seam**; the thing passed in is an **Adapter**.
 - An injectable wraps a **Resource** or composes injectables; a creatable is data that crosses interfaces.
-- The composition root is the one module whose **Implementation** is pure wiring.
+- A composition point is a module whose **Implementation** is pure wiring; the composition root is the widest.
+- A scope's composition binds two ingredients: adapters chosen at the root, and creatables arriving at the boundary.
 - Pure construction keeps every resource behind a seam, wiring included.
 
 ## Rejected framings
