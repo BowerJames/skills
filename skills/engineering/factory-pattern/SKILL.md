@@ -16,7 +16,7 @@ A factory is construction wrapped behind an interface: a module whose implementa
 
 **Factory** — a module whose job is construction: its signature declares construction's ingredients (adapters, configuration, runtime data) and returns a module behind an interface. Its implementation is the choice of concrete.
 
-_Avoid_: builder (assembles a creatable piece by piece — a different job), creator (vague), container (a registry, not a module).
+_Avoid_: builder (assembles a data object piece by piece — a different job), creator (vague), container (a registry, not a module).
 
 **Composition point** — where a graph is wired: the only code that names the concretes. The widest sits near `main`; a narrower one sits wherever runtime data arrives.
 
