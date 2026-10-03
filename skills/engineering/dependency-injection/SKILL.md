@@ -19,11 +19,11 @@ Use these terms exactly. The prerequisite terms (module, interface, implementati
 
 **Use** — the phase where the assembled module does its work. Construction wires; use works.
 
-**Injectable** — a module provided at construction to configure behaviour: it decides *how* the module works — which **Adapter** satisfies each **Seam**, which **Resource** is reached, which policy applies. It wraps a resource or composes other injectables, is bound once per **Scope**, never varies between calls, and carries no per-call state.
+**Injectable** — anything provided at construction to configure behaviour: a plain value (a bool, a timeout) or an **Adapter** at a **Seam**. It decides *how* the module works — which adapter satisfies each seam, which **Resource** is reached, which policy applies. Injectables never vary between calls and carry no per-call state; a module injectable wraps a resource or composes other injectables.
 
 _Avoid_: service (overloaded), singleton (a lifetime, not a role), helper.
 
-**Creatable** — a module passed via parameters to carry data: it decides *what* the module works on. Data varies per call, so creatables cross interfaces as parameters and returns, never sitting at seams — created anywhere, cheaply, short-lived, holding state and identity. Their behaviour, if any, is pure: answers about themselves, touching no resource.
+**Creatable** — anything passed via parameters to carry data: a plain value (a number, a string), an entity, a message, a DTO. It decides *what* the module works on. Data varies per call, so creatables cross interfaces as parameters and returns, never sitting at seams — created anywhere, cheaply, short-lived. Their behaviour, if any, is pure: answers about themselves, touching no resource.
 
 _Avoid_: model (overloaded), data bag.
 
@@ -86,11 +86,11 @@ Pure construction buys three things:
 
 ### 4. Separate injectables from creatables
 
-Every module is an injectable or a creatable, and the two never swap roles: injectables are provided at construction to configure behaviour; creatables are passed via parameters to carry data.
+Everything a module receives is an injectable or a creatable, and the two never swap roles: injectables are provided at construction to configure behaviour; creatables are passed via parameters to carry data.
 
 Rules of the split:
 
-- Injectables may depend on injectables. Creatables may hold only data, and other creatables.
+- Module injectables may depend on injectables. Creatables may hold only data, and other creatables.
 - Never inject a creatable. It's data: create it, or receive it as a method argument.
 - A parameter that never varies between calls is an injectable that missed construction: promote it.
 - A dependency that varies per call is a creatable at this scope: demote it to a parameter, or open a narrower scope and bind it there.
@@ -140,7 +140,7 @@ One composition point per scope. A DI framework or container is optional: it onl
 ## Relationships
 
 - A dependency declared in a signature is an **Interface** at a **Seam**; the thing passed in is an **Adapter**.
-- An injectable wraps a **Resource** or composes injectables; a creatable is data that crosses interfaces.
+- A module injectable wraps a **Resource** or composes injectables; a creatable is data that crosses interfaces.
 - A composition point is a module whose **Implementation** is pure wiring; the composition root is the widest.
 - A scope's composition binds two ingredients: adapters chosen at the root, and creatables arriving at the boundary.
 - Pure construction keeps every resource behind a seam, wiring included.
