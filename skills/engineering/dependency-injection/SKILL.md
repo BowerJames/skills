@@ -5,9 +5,11 @@ description: Discipline for wiring modules together. Covers coding against inter
 
 # Dependency Injection
 
-Dependency injection is passing a module its dependencies instead of letting it create or fetch them. In the vocabulary of **codebase-design**: a module receives **Adapters** across its **Seams** rather than reaching for **Resources** itself. The aim is that every resource sits behind a seam, every seam is declared in the **Interface**, and construction stays pure.
+Dependency injection is passing a module its dependencies instead of letting it create or fetch them: a module receives **Adapters** across its **Seams** rather than reaching for **Resources** itself. The aim is that every resource sits behind a seam, every seam is declared in the **Interface**, and construction stays pure.
 
-This skill uses the codebase-design terms — module, interface, implementation, seam, adapter, resource — exactly. Consult the codebase-design skill for those definitions.
+## Prerequisites
+
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (module, interface, implementation, seam, adapter, resource) exactly.
 
 ## Rules
 
@@ -36,7 +38,7 @@ The seam must be visible in the module's interface, and the constructor (or func
 - **Service locator** (asking a global registry or container for dependencies) removes the seam from the interface entirely: the module works only when the ambient world is arranged just so. Injection inverts this — dependencies arrive; the module never fetches.
 - **Setter injection** half-hides it: the module exists in an unready state until some caller remembers the setter. The interface lies about what is required.
 
-This is the testability rule "accept dependencies, don't create them" (see codebase-design), applied at the level of the signature.
+This is the testability rule "accept dependencies, don't create them" applied at the level of the signature.
 
 ### 3. Keep constructors pure and side-effect free
 
