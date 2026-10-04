@@ -12,6 +12,10 @@ A prerequisite chain — install all three together:
 - **[dependency-injection](skills/engineering/dependency-injection/SKILL.md)** — wiring modules together: code against interfaces, declare seams at construction. *Requires codebase-design.*
 - **[factory-pattern](skills/engineering/factory-pattern/SKILL.md)** — construction wrapped behind an interface. *Requires the two above.*
 
+Standalone:
+
+- **[testing](skills/engineering/testing/SKILL.md)** — testing modules through their interfaces: behaviour, seams, test adapters, red → green. *Requires codebase-design.*
+
 ### Utils
 
 - **[repo-explorer](skills/utils/repo-explorer/SKILL.md)** — explore codebases without cluttering the workspace, via a `/tmp/repos/` cache.
