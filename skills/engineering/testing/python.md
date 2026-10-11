@@ -25,7 +25,7 @@ def create_order_processor(
             raise ...
         return Receipt(
             total=total
-    )
+        )
     return process_order
 ```
 
@@ -49,7 +49,7 @@ def order_with(prices: list[float]) -> Order:  # a harness helper: construction 
 
 def setup(
     gateway: PaymentGateway
-) -> OrderProcessor: # Use a helper to wrap the module factory so future changes to the factory design can be localised in the test file 
+) -> OrderProcessor: # Use a helper to wrap the module factory so future changes to the factory design can be localised in the test file
     return create_order_processor(
         gateway
     )
@@ -58,7 +58,7 @@ def setup(
     ([100], 100),                            # worked examples, chosen by hand
     ([100, 40], 140),
 ])
-def test_charges_the_gateway_the_cart_total(prices, expected_charge):
+def test_charges_the_gateway_the_order_total(prices, expected_charge):
     gateway = FakeGateway()                    # the test adapter at the seam
     order_processor = setup(gateway)
     order_processor(order_with(prices))          # driven through the interface

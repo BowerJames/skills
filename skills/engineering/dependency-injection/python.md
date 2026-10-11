@@ -35,15 +35,15 @@ class PaymentGateway(Protocol):
 type OrderProcessor = Callable[[Order], Receipt]
 
 def create_order_processor(
-    gateway: PaymentGateway # The factory for the OrderProcessor is using the PaymentGateway interface which can be substitued for any PaymentGateway.
+    gateway: PaymentGateway # The factory for the OrderProcessor is using the PaymentGateway interface which can be substituted for any PaymentGateway.
 ) -> OrderProcessor:
     ...
 
 ```
 
-## Rule 2: declare seams at construction
+## Rule 2: declare seams in factories
 
-Bad example for `OrderProcessor` module:
+Avoid for an `OrderProcessor` module:
 
 ```python
 class PaymentGateway(Protocol):
@@ -54,7 +54,7 @@ type OrderProcessor = Callable[[Order, PaymentGateway], Receipt]
 
 def process_order(
     order: Order,
-    gateway: PaymentGateway # The seam that change the capability of the order processor exists in the interface
+    gateway: PaymentGateway # The seam that changes the capability of the order processor exists in the interface
 ) -> Receipt:
     total = 0
     for item in order.items:
@@ -67,7 +67,7 @@ def process_order(
     )
 ```
 
-Good example for `OrderProcessor` module:
+Prefer for an `OrderProcessor` module:
 
 ```python
 class PaymentGateway(Protocol):
@@ -88,6 +88,6 @@ def create_order_processor(
             raise ...
         return Receipt(
             total=total
-    )
+        )
     return process_order
 ```

@@ -1,4 +1,4 @@
-# Test-driven development
+# Test-driven development in Python
 
 Below follows an example for a TDD approach towards building an `OrderProcessor` module. We can assume elsewhere in the codebase the following `PaymentGateway` module has already been designed and has the following interface:
 
@@ -117,11 +117,11 @@ def test_charges_total_of_all_order_items(
     order_processor
 ):
     order = order_with(prices)
-    order_processor(prices)
-    assert payment_gateway.charges == expected_charge
+    order_processor(order)
+    assert payment_gateway.charges == [expected_charge]
 ```
 
-Now the type checker need to be made to pass:
+Now the type checker needs to be made to pass:
 
 ```python
 from typing import Protocol

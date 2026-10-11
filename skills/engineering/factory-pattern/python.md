@@ -33,7 +33,7 @@ def create_payment_gateway(
         type: Literal["stripe", "paypal"],
         env_variable_loader: EnvVariableLoader,
         http: HTTP
-    ) -> StripeGateway | PaypalGateway: # This is not a factory for the PaymentGateway module as it declares the return type is implementation of the module not the module interface.
+    ) -> StripeGateway | PaypalGateway: # This is not a factory for the PaymentGateway module as it declares the return type as an implementation of the module, not the module interface.
     if type == "stripe":
         api_key = env_variable_loader("STRIPE_API_KEY")
         return StripeGateway(api_key, http)
@@ -42,7 +42,7 @@ def create_payment_gateway(
         return PaypalGateway(api_key, http)
 ```
 
-Good example for `PaymentGateway` module:
+Good example for a `PaymentGateway` module:
 
 ```python
 class PaymentGateway(Protocol):

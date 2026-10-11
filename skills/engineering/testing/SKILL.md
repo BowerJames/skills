@@ -5,13 +5,13 @@ description: Discipline for testing modules through their interfaces. Use when w
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (module, interface, implementation, seam, adapter, resource) exactly, especially two of its principles: a module's interface is the test surface, and a resource is reached through a seam, satisfied by the real adapter in production and a test adapter in tests.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (module, interface, behaviour, implementation, seam, adapter, factory, resource) exactly, especially two of its principles: a module's interface and factories are the test surface, and a resource is reached through a seam, satisfied by the real adapter in production and a test adapter in tests.
 
 # Testing
 
 ## Glossary
 
-**Module under test** — The module thats factories and interface tests are driven through.
+**Module under test** — The module whose factories and interface tests are driven through.
 
 _Avoid_: unit under test, system under test, SUT, code under test.
 
@@ -30,7 +30,7 @@ _Avoid_: test framework (too restrictive, doesn't cover the helper functions and
 A good test verifies one **Behaviour** of one **Module under test** — nothing else.
 
 - **Through the factory and interface.** It drives the module under test and observes outcomes only through its interface (including test adapters at seams), the same surface every caller crosses. The implementation can change entirely while behaviour holds; the test doesn't notice.
-- **Reads like a specification.** Named for the capability it verifies — "checking out charges the gateway the cart total" — so the suite is a list of behaviours, and the **test harness** reports each present or absent. A name promising one behaviour while the assertions check another is a test carrying two behaviours.
+- **Reads like a specification.** Named for the capability it verifies — "charges the gateway the order total" — so the suite is a list of behaviours, and the **test harness** reports each present or absent. A name promising one behaviour while the assertions check another is a test carrying two behaviours.
 - **One behaviour, one set of conditions.** A test is one exercise of one behaviour; a second condition is a second test.
 - **Independent expectations.** The expected outcome comes from an independent source of truth: a worked example, a known-good value, test harness code, the spec. Never from running the implementation.
 
@@ -38,7 +38,7 @@ A good test verifies one **Behaviour** of one **Module under test** — nothing 
 
 A test lives at a seam, never against internals: pick the **Module under test**, construct an entity through a factory, drive and observe through the interface and test adapters.
 
-- **Substitute at every seam.** Whatever the seam fronts — a **Resource** or a collaborator — a **test adapter** satisfies it in the test: for control, for observation, for localisation (the three reasons, per the glossary).
+- **Substitute at every seam.** Whatever the seam fronts — a **Resource** or a collaborator — a **test adapter** satisfies it in the test: to control what crosses inward, to observe what crosses outward, and to localise failures to the module under test.
 
 ## Anti-patterns
 
@@ -51,5 +51,5 @@ Each is a good-test criterion violated:
 
 The sections above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — pytest as the harness, mypy as the compile step, fixtures wiring test adapters, fakes by shape, Python gotchas
-- [typescript.md](typescript.md) — TypeScript idioms (not yet written)
+- [python.md](python.md) — pytest as the harness, a fake as the test adapter, a helper wrapping the factory, both anti-patterns
+- [typescript.md](typescript.md) — vitest as the harness, a fake as the test adapter, a helper wrapping the factory, both anti-patterns

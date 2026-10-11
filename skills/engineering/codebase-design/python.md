@@ -58,17 +58,17 @@ Matching is structural: `StripeGateway` and `PaypalGateway` both satisfy the `Pa
 
 Explicit inheritance (`class StripeGateway(PaymentGateway)`) is allowed and documents intent — it lets the type checker flag drift — but it is a declaration, never a requirement.
 
-This module is well designed deep module:
+This module is a well designed deep module:
 
 **Leverage for the caller** - The module allows the caller to make payments through stripe and paypal through a simple interface with a single method with a single parameter.
 
-**Flexibility for developers** - It is simple to extend the module capabilities by simply adding another class satisfying the `PaymentGateway` interface and adding a single extra conditional branch in the implementation of the contruction point.
+**Flexibility for developers** - It is simple to extend the module capabilities by simply adding another class satisfying the `PaymentGateway` interface and adding a single extra conditional branch in the implementation of the factory.
 
-**Testability for everyone** - The module can be tested easily through its construction point and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
+**Testability for everyone** - The module can be tested easily through its factory and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
 
 ## Example 2
 
-Below are 2 valid formulation of an `OrderProcessor` module built on top of example 1.
+Below are 2 valid formulations of an `OrderProcessor` module built on top of example 1.
 
 ```python
 from typing import Callable
@@ -115,12 +115,12 @@ def create_order_processor(
     return process_order
 ```
 
-Both examples are completely valid. The second removes complexity from the interface of `OrderProcessor` and places it in the factory for the module. This is generally prefered where possible.
+Both are modules with a seam; they differ in where the seam sits. The first places it in the interface, so every caller must supply a gateway. The second places it in the factory, leaving the interface with only data. Prefer the second wherever the adapter is known when the entity is created (see dependency-injection, rule 2).
 
 The second example exhibits:
 
 **Leverage for Consumers** - Has the capability to total orders and process payments through Stripe and Paypal (thanks to the existing adapters)
 
-**Locality for Maintainers** - Tests can be written with a fake payment gateway allowing them to localise bugs in the order totaling vs payment gateways. Any changed to the order processing can be propogated to all payment gateway types through one place.
+**Locality for Maintainers** - Tests can be written with a fake payment gateway allowing them to localise bugs in the order totaling vs payment gateways. Any change to the order processing can be propagated to all payment gateway types through one place.
 
-**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities. 
+**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities.
