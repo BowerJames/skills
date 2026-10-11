@@ -1,6 +1,6 @@
 ---
 name: dependency-injection
-description: Discipline for wiring modules together. Covers coding against interfaces and declaring seams at construction. Use when wiring dependencies, structuring initialisation, or fixing modules that create or fetch what they need. Requires the codebase-design skill.
+description: Discipline for wiring modules together. Covers coding against interfaces and declaring seams in the factory. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the dependency-injection vocabulary.
 ---
 
 # Prerequisites
@@ -11,29 +11,27 @@ description: Discipline for wiring modules together. Covers coding against inter
 
 Dependency injection is passing a module its dependencies instead of letting it create or fetch them: a module receives **Adapters** across its **Seams** rather than reaching for **Resources** itself. The aim is that every resource sits behind a seam, and every seam is declared in the **Interface**.
 
-## Glossary
-
-Use these terms exactly. The prerequisite terms (module, interface, implementation, seam, adapter, resource) are defined in [codebase-design](../codebase-design/SKILL.md); these are this skill's own.
-
-**Construction** — the act of assembling a module so it is ready for use: a class constructor, a factory function, or simply entering a function.
-
 ## Rules
 
 ### 1. Code against interfaces, not implementations
 
-Declare a dependency's type as an **Interface**, not a concrete class. The concrete thing is an **Adapter**; the seam exists only where the interface is declared.
+Where possible a modules interface and dependencies passed in factories should be interfaces not implementations.
 
-The interface belongs to the consumer: declare the operations the caller needs, which is often a subset of the adapter's full surface. A consumer forced to see `refund` when it only ever charges is seeing someone else's interface.
+This improves **flexibility for developers** since modules can be deepened through the creation of new adapters.
 
-### 2. Declare seams at construction
+This improves **locality for maintainers** since modules can be used with a wide range of entities allowing the localistion of behaviour.
 
-The seam must be visible in the module's interface, and construction is where the interface declares it. A dependency in the signature is a fact every caller and test can see and must satisfy; a dependency fetched inside the body is a hidden resource — present in behaviour, absent from the interface.
+This improved **testability for everyone** as swappable mocks can be used in tests to observe and drive behaviours.
 
-- **Injection at construction makes the invalid state unrepresentable.** A module cannot be assembled without its adapters.
-- **Service locator** (asking a global registry or container for dependencies) removes the seam from the interface entirely: the module works only when the ambient world is arranged just so. Injection inverts this — dependencies arrive; the module never fetches.
-- **Setter injection** half-hides it: the module exists in an unready state until some caller remembers the setter. The interface lies about what is required.
+### 2. Declare seams in factories
 
-This is the testability rule "accept dependencies, don't create them" applied at the level of the signature. Construction is partial application: bind the behaviour, and what remains is a stable function from data to results.
+Anything that changes the behaviour of an entity satisfying a modules interface should be passed at the construction point.
+
+This improves **leverage for callers** since the interface for the modules stays simpler increasing the capability per unit of complexity in the interface.
+
+This improves **locality for maintainers** since it reduces the number of location the behaviour of modules changes.
+
+This improves **testability for everyone** since behaviours can be tested consistently based only on the factory setup. It also allows tests to be grouped by factory setup.
 
 ## Language idioms
 
