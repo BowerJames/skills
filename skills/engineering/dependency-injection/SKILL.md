@@ -17,6 +17,8 @@ Dependency injection is passing a module its dependencies instead of letting it 
 
 Where possible a module's interface and the dependencies passed in factories should be interfaces, not implementations.
 
+This applies to things with behaviour. A data carrier has no implementation behind it, so it is passed as its concrete type.
+
 This improves **flexibility for developers** since modules can be deepened through the creation of new adapters.
 
 This improves **locality for maintainers** since modules can be used with a wide range of entities allowing the localisation of behaviour.
