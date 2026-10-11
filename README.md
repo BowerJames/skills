@@ -17,6 +17,10 @@ Testing:
 - **[testing](skills/engineering/testing/SKILL.md)** — testing modules through their factories and interfaces: one behaviour per test, test adapters at the seams. *Requires codebase-design.*
 - **[test-driven-development](skills/engineering/test-driven-development/SKILL.md)** — driving development through tests: the red → green loop, one behaviour per cycle. *Requires codebase-design and testing.*
 
+Structure:
+
+- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: one package and entry point per module, shared data carriers moved at second use, imports pointing one way. *Requires codebase-design.*
+
 ### Utils
 
 - **[repo-explorer](skills/utils/repo-explorer/SKILL.md)** — explore codebases without cluttering the workspace, via a `/tmp/repos/` cache.
