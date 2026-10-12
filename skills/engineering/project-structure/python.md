@@ -13,7 +13,7 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 
 Python calls every `.py` file a "module". In these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.py` file.
 
-Files behind the entry point are prefixed with `_`, which marks them as not for import from outside the package.
+Files behind the entry point carry no `_` prefix. The entry point decides what is public: a name is public if `__init__.py` re-exports it and lists it in `__all__`, and private otherwise.
 
 ## Example 1: first use
 
@@ -23,26 +23,26 @@ Files behind the entry point are prefixed with `_`, which marks them as not for 
 src/
   order_processor/
     __init__.py            # the entry point
-    _order_processor.py    # OrderProcessor, create_order_processor
-    _types.py              # Order, OrderItem, Receipt
+    order_processor.py     # OrderProcessor, create_order_processor
+    types.py               # Order, OrderItem, Receipt
   payment_gateway/
     __init__.py            # the entry point
-    _payment_gateway.py    # PaymentGateway, create_payment_gateway
-    _stripe.py             # StripeGateway
-    _paypal.py             # PaypalGateway
+    payment_gateway.py     # PaymentGateway, create_payment_gateway
+    stripe.py              # StripeGateway
+    paypal.py              # PaypalGateway
 ```
 
 ```python
 # order_processor/__init__.py
-from ._order_processor import OrderProcessor, create_order_processor
-from ._types import Order, OrderItem, Receipt
+from .order_processor import OrderProcessor, create_order_processor
+from .types import Order, OrderItem, Receipt
 
 __all__ = ["Order", "OrderItem", "OrderProcessor", "Receipt", "create_order_processor"]
 ```
 
 ```python
 # payment_gateway/__init__.py
-from ._payment_gateway import PaymentGateway, create_payment_gateway
+from .payment_gateway import PaymentGateway, create_payment_gateway
 
 __all__ = ["PaymentGateway", "create_payment_gateway"]  # StripeGateway and PaypalGateway are not exported
 ```
@@ -50,9 +50,9 @@ __all__ = ["PaymentGateway", "create_payment_gateway"]  # StripeGateway and Payp
 `Order` and `Receipt` appear in the `OrderProcessor` interface, so the entry point exports them. Another package imports only from an entry point:
 
 ```python
-# order_processor/_order_processor.py
+# order_processor/order_processor.py
 from payment_gateway import PaymentGateway           # good: the entry point
-from payment_gateway._stripe import StripeGateway    # bad: reaches behind the entry point
+from payment_gateway.stripe import StripeGateway     # bad: reaches behind the entry point
 ```
 
 ## Example 2: second use
@@ -62,7 +62,7 @@ Three new modules each need `Order`. Each one meets a different question from ru
 **Only a slice.** An `AuditLog` module records which orders were processed. It reads only the id, so it declares its own interface and imports nothing:
 
 ```python
-# audit_log/_audit_log.py
+# audit_log/audit_log.py
 from typing import Protocol
 
 class Identified(Protocol):        # the slice of Order this module needs
@@ -75,7 +75,7 @@ class Identified(Protocol):        # the slice of Order this module needs
 **Already depends on the owner.** A `Checkout` module is built on top of an `OrderProcessor`, so it already imports that module's interface. It imports `Order` from the same entry point:
 
 ```python
-# checkout/_checkout.py
+# checkout/checkout.py
 from order_processor import Order, OrderProcessor, Receipt
 ```
 
@@ -87,11 +87,11 @@ src/
     order.py               # Order, OrderItem
   invoicing/
     __init__.py
-    _invoicing.py          # from domain.order import Order
+    invoicing.py           # from domain.order import Order
   order_processor/
     __init__.py
-    _order_processor.py    # from domain.order import Order
-    _types.py              # Receipt stays: only this module's interface uses it
+    order_processor.py     # from domain.order import Order
+    types.py               # Receipt stays: only this module's interface uses it
 ```
 
 The entry point can keep re-exporting `Order` while callers are updated, so the move is one definition and its import lines:
@@ -99,8 +99,8 @@ The entry point can keep re-exporting `Order` while callers are updated, so the 
 ```python
 # order_processor/__init__.py
 from domain.order import Order, OrderItem    # re-exported until callers import from domain.order
-from ._order_processor import OrderProcessor, create_order_processor
-from ._types import Receipt
+from .order_processor import OrderProcessor, create_order_processor
+from .types import Receipt
 ```
 
 Tests that drive `OrderProcessor` through its factory and interface do not change.
