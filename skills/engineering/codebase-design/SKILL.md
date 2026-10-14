@@ -20,21 +20,21 @@ Use these terms exactly — don't substitute "component," "service," "API," or "
 
 **Entity** — A code construct, could be a class, function, type or any other structure that exists within the language syntax.
 
-**Interface** — everything a caller must know to use an entity correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics.
+**Interface** — everything a caller must know to use an entity correctly: the type signature, but also invariants, ordering constraints, error modes and performance characteristics. A module's error modes include the errors its port lets propagate.
 
 _Avoid_: API, signature (too narrow — they refer only to the type-level surface).
 
 **Implementation** — The body of code that sits behind an interface.
 
-**Constructor** — A singular thing anything must run to create an entity. Must contain everything required to measure the behaviours of the entity.
+**Constructor** — the one function that creates an entity. It takes everything required to measure the entity's behaviours, and it reaches no resource.
 
-**Port** — An interface defined by an entity that must be provided to its constructor.
+**Port** — An interface defined by an entity that must be provided to its constructor. A module defines at most one port, and that port holds everything the module needs from outside itself.
 
-**Module** — Something with an interface, an implementation and that defines all the interfaces in its constructor (ports).
+**Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
 
 _Avoid_: unit, component, service.
 
-**Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from ports which are interfaces not values.
+**Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from a port, which is an interface, not a value.
 
 **Adapter** — An entity defined to satisfy a port.
 
@@ -42,9 +42,9 @@ _Avoid_: unit, component, service.
 
 **Factory** — Anything that calls the constructor of an entity and returns the entity.
 
-**Capability** — what an entity can do for a caller through its interface, counting what the entities passed to its constructor provide. One behaviour gives one capability for each adapter that can satisfy a port.
+**Capability** — what an entity can do for a caller through its interface, counting what the adapter passed to its constructor provides. The same behaviour gives a different capability for each adapter that can satisfy the port.
 
-**Data carrier** — a type that holds data and its invariants and reaches no resource: `Order`, `Receipt`, `Money`. It carries data, not behaviour: it has fields, it can refuse to be created with invalid data, and it has no other methods. A computation over a data carrier, however small, belongs in the implementation of a module. It has no implementation behind it, so entities take and return it as its concrete type, not through an interface of its own.
+**Data carrier** — a type that holds data and reaches no resource: `Order`, `Receipt`, `Currency`. It has fields and no methods, and its only invariants are the ones its types express. Validation beyond the types, and any computation over a data carrier, however small, belongs in the implementation of a module. It has no implementation behind it, so entities take and return it as its concrete type, not through an interface of its own, and it has no tests of its own.
 
 _Avoid_: model (overloaded with ORMs and machine learning), DTO, entity (already means any code construct).
 
@@ -67,9 +67,9 @@ When designing an interface, ask whether you can maintain the range of capabilit
 
 ## When to make a module
 
-A module is the unit that tests are written against, and a connection between two modules costs a port, an adapter, wiring in a factory and a test adapter. So the default is not to make one.
+A module is the unit that tests are written against, and a connection between two modules costs a port method, an adapter, wiring in a factory and a test adapter. So the default is not to make one.
 
-**Default:** new behaviour goes inside an existing module's implementation. An implementation can grow to as many files as it needs without becoming a second module.
+**Default:** new behaviour goes inside an existing module's implementation. An implementation can grow to as many files as it needs without becoming a second module, and its internal code is structured however suits it.
 
 Split behaviour out into its own module when one of these holds:
 
@@ -79,27 +79,32 @@ Split behaviour out into its own module when one of these holds:
 
 ## Principles
 
-- **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its ports.
+- **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its port.
 - **An entity's constructor is not part of its interface.** Adding complexity to the constructor of a module does not increase the complexity of the entity's interface and therefore does not reduce the leverage.
 - **An entity's interface and constructor are the test surface.** Callers and tests drive through the same interface. Behaviours can be measured through the interface and constructor.
-- **Behaviour is not the same as capability.** An entity's capability is measured including the capability of the entities included in its constructor.
 - **A port between two modules is a cost paid for independence.** It should buy something: a separate test surface, a second user, or the ability to swap.
+
+## Errors
+
+- **An error propagates by default.** Code that cannot handle an error lets it pass through unchanged.
+- **An error is handled or propagated, never wrapped.** Catching an error to raise a different one in its place hides where it came from. Handling means deciding the outcome: an adapter that turns a card decline into a `false` from its port has handled it.
+- **An entity defines an error only when its own implementation determines it, and then it owns it.** A module that refuses an order defines that error in its own package. An adapter that determines an error of its own defines it in the adapter's package. Neither defines errors for failures that belong to something else.
 
 ## Designing for testability
 
 Good entities make testing natural:
 
 1. **Constructors accept dependencies, they don't create them.**
-2. **Return results, don't produce side effects.**
+2. **Side effects go through the port.** The implementation returns results, and anything else it causes is a call on its port, where a test adapter can observe it.
 3. **Small surface area.** Fewer methods = fewer tests needed. Fewer params = simpler test setup.
 
 ## Relationships
 
-- A **Module** has exactly one **Interface** (the surface it presents to callers and tests).
+- A **Module** has exactly one **Interface** (the surface it presents to callers and tests) and at most one **Port**.
 - **Capability** is a property of an **Entity**, measured against its **Interface**.
 - An entity can have many **Factories** but only one **Constructor**.
-- An **Adapter**'s interface must satisfy a **Port**.
-- A **Port** belongs to the entity that defines it. A module has ports, and so can an adapter: whatever an adapter's constructor takes as an interface is a port of that adapter.
+- An **Adapter**'s interface must satisfy a **Port**, and it satisfies the whole port.
+- A **Port** belongs to the entity that defines it. A module has at most one. Any other entity can have its own: whatever an adapter's or an entrypoint's constructor takes as an interface is a port of it.
 - An **Adapter** is told apart from a **Module** by its role, not its shape: it exists to satisfy a port.
 
 ## Rejected framings
@@ -110,5 +115,5 @@ Good entities make testing natural:
 
 The vocabulary above is language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` module with its port, adapters and factory
-- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` module with its port, adapters and factory
+- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and a factory
+- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and a factory

@@ -8,10 +8,11 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 |---|---|
 | **Package** | a directory with an `__init__.py` |
 | **Export file** | the package's `__init__.py`, re-exporting names and listing them in `__all__` |
-| **Data carrier** | a frozen `dataclass` |
-| **Domain package** | `core/domain`, with one file per concept — `core/domain/order.py` |
+| **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
+| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py` |
 | **Factory package** | `infrastructure/factories/<module_name>`, with the factories in `factory.py` |
-| **Entrypoint** | a file in `infrastructure/entrypoints` — `infrastructure/entrypoints/cli.py` |
+| **Entrypoint** | a class in a file in `infrastructure/entrypoints` — `Cli` in `infrastructure/entrypoints/cli.py` |
+| **Startup code** | the `if __name__ == "__main__":` block in the entrypoint's file |
 
 Python calls every `.py` file a "module". In these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.py` file.
 
@@ -19,20 +20,21 @@ Files behind the export file carry no `_` prefix. The export file decides what i
 
 ## Example 1: a module and its adapters
 
-An `OrderProcessor` module charges for an order through a `PaymentPort`. Stripe and PayPal each satisfy that port.
+An `OrderProcessor` module charges for an order through its `OrderProcessorPort`. A Stripe adapter and a PayPal adapter each satisfy that port.
 
 ```
 src/
   core/
     domain/
       __init__.py
-      order.py                 # Order, OrderItem
-      receipt.py               # Receipt
+      currency.py              # Currency
     order_processor/
       __init__.py              # the export file
       interface.py             # OrderProcessor
+      port.py                  # OrderProcessorPort
+      data.py                  # Order, OrderItem, Receipt
+      errors.py                # PaymentDeclined
       implementation.py        # OrderProcessorImpl; could be several files
-      ports.py                 # PaymentPort
   infrastructure/
     adapters/
       order_processor/
@@ -52,40 +54,81 @@ src/
       cli.py
 ```
 
-The interface, the implementation and the ports each have their own file:
+`Currency` means the same thing to every module and belongs to none, so it is in the domain package. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the module's data file:
+
+```python
+# core/domain/currency.py
+from typing import Literal
+
+type Currency = Literal["GBP", "USD", "EUR"]
+```
+
+```python
+# core/order_processor/data.py
+from dataclasses import dataclass
+
+from core.domain.currency import Currency
+
+@dataclass(frozen=True)
+class OrderItem:
+    name: str
+    cost: int # in the currency's minor unit
+
+@dataclass(frozen=True)
+class Order:
+    id: str
+    items: tuple[OrderItem, ...]
+
+@dataclass(frozen=True)
+class Receipt:
+    total: int
+    currency: Currency
+```
+
+The interface, the port, the errors and the implementation each have their own file:
 
 ```python
 # core/order_processor/interface.py
 from typing import Protocol
 
-from core.domain.order import Order
-from core.domain.receipt import Receipt
+from .data import Order, Receipt
 
 class OrderProcessor(Protocol): # Interface for the module
     def __call__(self, order: Order) -> Receipt: ...
 ```
 
 ```python
-# core/order_processor/ports.py
+# core/order_processor/port.py
 from typing import Protocol
 
-class PaymentPort(Protocol): # Port defined for the module
-    def charge(self, amount: float) -> bool: ...
+from core.domain.currency import Currency
+
+class OrderProcessorPort(Protocol): # The module's port
+    def charge(self, amount: int, currency: Currency) -> bool: ...
+```
+
+```python
+# core/order_processor/errors.py
+class PaymentDeclined(Exception): # Determined by the module's implementation
+    ...
 ```
 
 ```python
 # core/order_processor/implementation.py
-from core.domain.order import Order
-from core.domain.receipt import Receipt
+from core.domain.currency import Currency
 
-from .ports import PaymentPort
+from .data import Order, Receipt
+from .errors import PaymentDeclined
+from .port import OrderProcessorPort
 
 class OrderProcessorImpl: # Implementation of the module
     def __init__(
         self,
-        payment: PaymentPort
+        port: OrderProcessorPort,
+        currency: Currency
     ): # Constructor for the module
-        self.payment = payment
+        self.port = port
+        self.currency = currency
 
     def __call__(self, order: Order) -> Receipt:
         ...
@@ -93,29 +136,38 @@ class OrderProcessorImpl: # Implementation of the module
 
 ```python
 # core/order_processor/__init__.py
+from .data import Order, OrderItem, Receipt
+from .errors import PaymentDeclined
 from .implementation import OrderProcessorImpl
 from .interface import OrderProcessor
-from .ports import PaymentPort
+from .port import OrderProcessorPort
 
-__all__ = ["OrderProcessor", "OrderProcessorImpl", "PaymentPort"]
+__all__ = [
+    "Order",
+    "OrderItem",
+    "OrderProcessor",
+    "OrderProcessorImpl",
+    "OrderProcessorPort",
+    "PaymentDeclined",
+    "Receipt",
+]
 ```
-
-`Order` and `Receipt` appear in the `OrderProcessor` interface, so they are defined in the domain package from the start.
 
 An adapter imports the port from the module's export file:
 
 ```python
 # infrastructure/adapters/order_processor/stripe/adapter.py
-from core.order_processor import PaymentPort                       # good: the export file
-from core.order_processor.ports import PaymentPort                 # bad: reaches behind the export file
+from core.domain.currency import Currency
+from core.order_processor import OrderProcessorPort                # good: the export file
+from core.order_processor.port import OrderProcessorPort           # bad: reaches behind the export file
 from infrastructure.adapters.order_processor.paypal import ...     # bad: an adapter importing another adapter
 
 from .http import HTTP                                             # good: the adapter's own port, defined in its own package
 
-class StripeAdapter(PaymentPort): # Adapter for the payment port
+class StripeAdapter(OrderProcessorPort): # Adapter for the module's port
     def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
 
-    def charge(self, amount: float) -> bool: ...
+    def charge(self, amount: int, currency: Currency) -> bool: ...
 ```
 
 Nothing in `core` imports from `infrastructure`:
@@ -133,18 +185,21 @@ The factory that chooses an adapter imports the adapters, so it lives in `infras
 # infrastructure/factories/order_processor/factory.py
 from typing import Literal
 
+from core.domain.currency import Currency
 from core.order_processor import OrderProcessor, OrderProcessorImpl
-from infrastructure.adapters.order_processor.paypal import PaypalAdapter
-from infrastructure.adapters.order_processor.stripe import StripeAdapter
+from infrastructure.adapters.order_processor.paypal import PaypalAdapter, RealHTTP as PaypalHTTP
+from infrastructure.adapters.order_processor.stripe import StripeAdapter, RealHTTP as StripeHTTP
 
 def create_order_processor(
-        type: Literal["stripe", "paypal"]
+        provider: Literal["stripe", "paypal"],
+        api_key: str,
+        currency: Currency
     ) -> OrderProcessor: # A factory for the order processor module
-    if type == "stripe":
-        payment = StripeAdapter(...)
-    elif type == "paypal":
-        payment = PaypalAdapter(...)
-    return OrderProcessorImpl(payment)
+    if provider == "stripe":
+        port = StripeAdapter(api_key, StripeHTTP())
+    elif provider == "paypal":
+        port = PaypalAdapter(api_key, PaypalHTTP())
+    return OrderProcessorImpl(port, currency)
 ```
 
 ```python
@@ -154,50 +209,85 @@ from .factory import create_order_processor
 __all__ = ["create_order_processor"]
 ```
 
-The entrypoint asks the factory for an entity and drives it through its interface. It calls no constructor and imports no adapter:
+The entrypoint's constructor takes the entity it drives, and the entrypoint translates between the outside world and data carriers. The startup code beside it reads the environment, calls the factory and passes the entity to the entrypoint's constructor:
 
 ```python
 # infrastructure/entrypoints/cli.py
-from core.domain.order import Order
+import os
+import sys
+
+from core.order_processor import Order, OrderItem, OrderProcessor
 from infrastructure.factories.order_processor import create_order_processor
 
-def main(argv: list[str]) -> None:
-    order_processor = create_order_processor("stripe")
-    order = Order(...)                 # translate the outside world into a data carrier
-    receipt = order_processor(order)
-    print(receipt)
+class Cli: # The entrypoint: calls no module's constructor and no factory, imports no adapter
+    def __init__(self, order_processor: OrderProcessor): # Its constructor takes the interface it drives
+        self.order_processor = order_processor
+
+    def __call__(self, argv: list[str]) -> None:
+        order = Order(
+            id=argv[0],
+            items=tuple(OrderItem(name=f"item_{i}", cost=int(cost)) for i, cost in enumerate(argv[1:]))
+        ) # translate the outside world into a data carrier
+        receipt = self.order_processor(order)
+        print(f"total={receipt.total} {receipt.currency}")
+
+if __name__ == "__main__": # The startup code
+    cli = Cli(
+        create_order_processor(
+            provider="stripe",
+            api_key=os.environ["STRIPE_API_KEY"],
+            currency="GBP"
+        )
+    )
+    cli(sys.argv[1:])
 ```
 
 ## Example 3: a module that needs another module
 
-A `Checkout` module is built on top of order processing. It does not import `core/order_processor`. It declares a port with the shape it needs:
+A `Checkout` module is built on top of order processing. It does not import `core/order_processor`. It declares its own data carriers and a port with the shape it needs:
 
 ```python
-# core/checkout/ports.py
-from typing import Protocol
+# core/checkout/data.py
+from dataclasses import dataclass
 
-from core.domain.order import Order
-from core.domain.receipt import Receipt
+@dataclass(frozen=True)
+class CartLine:
+    product: str
+    price: int
 
-class OrderProcessingPort(Protocol): # Port defined for the checkout module
-    def process(self, order: Order) -> Receipt: ...
+@dataclass(frozen=True)
+class Cart:
+    id: str
+    lines: tuple[CartLine, ...]
 ```
 
-An adapter under `infrastructure/adapters/checkout` satisfies the port by calling an `OrderProcessor` through its interface:
+```python
+# core/checkout/port.py
+from typing import Protocol
+
+from .data import Cart
+
+class CheckoutPort(Protocol): # The checkout module's port
+    def pay(self, cart: Cart) -> int: ...
+```
+
+An adapter under `infrastructure/adapters/checkout` satisfies the port by calling an `OrderProcessor` through its interface, translating between the two modules' data carriers:
 
 ```python
 # infrastructure/adapters/checkout/order_processor/adapter.py
-from core.checkout import OrderProcessingPort
-from core.domain.order import Order
-from core.domain.receipt import Receipt
-from core.order_processor import OrderProcessor
+from core.checkout import Cart, CheckoutPort
+from core.order_processor import Order, OrderItem, OrderProcessor
 
-class OrderProcessorAdapter(OrderProcessingPort): # Adapter connecting checkout to the order processor module
+class OrderProcessorAdapter(CheckoutPort): # Adapter connecting checkout to the order processor module
     def __init__(self, order_processor: OrderProcessor): # Constructor takes the interface, never the implementation
         self.order_processor = order_processor
 
-    def process(self, order: Order) -> Receipt:
-        return self.order_processor(order)
+    def pay(self, cart: Cart) -> int:
+        order = Order(
+            id=cart.id,
+            items=tuple(OrderItem(name=line.product, cost=line.price) for line in cart.lines)
+        ) # checkout's data, translated into the order processor's
+        return self.order_processor(order).total
 ```
 
 The checkout factory gets an `OrderProcessor` from the order processor's factory package and passes it to the adapter:
@@ -208,8 +298,8 @@ from core.checkout import Checkout, CheckoutImpl
 from infrastructure.adapters.checkout.order_processor import OrderProcessorAdapter
 from infrastructure.factories.order_processor import create_order_processor
 
-def create_checkout() -> Checkout: # A factory for the checkout module
-    order_processor = create_order_processor("stripe")
+def create_checkout(api_key: str) -> Checkout: # A factory for the checkout module
+    order_processor = create_order_processor("stripe", api_key, "GBP")
     return CheckoutImpl(OrderProcessorAdapter(order_processor))
 ```
 
@@ -220,17 +310,24 @@ tests/
   unit/
     core/
       order_processor/
-        test_order_processor.py    # constructs OrderProcessorImpl with FakePaymentAdapter
-        adapters.py                # FakePaymentAdapter: test adapters for this module's ports
+        test_order_processor.py    # constructs OrderProcessorImpl with FakeOrderProcessorAdapter
+        adapters.py                # FakeOrderProcessorAdapter: the test adapter for this module's port
       checkout/
         test_checkout.py
-        adapters.py                # FakeOrderProcessingAdapter
+        adapters.py                # FakeCheckoutAdapter
     infrastructure/
       adapters/
         order_processor/
           stripe/
             test_stripe.py         # constructs StripeAdapter with FakeHTTP
             adapters.py            # FakeHTTP
+        checkout/
+          order_processor/
+            test_order_processor.py  # constructs OrderProcessorAdapter with FakeOrderProcessor
+            adapters.py              # FakeOrderProcessor
+      entrypoints/
+        test_cli.py                # constructs Cli with FakeOrderProcessor
+        adapters.py                # FakeOrderProcessor
   integration/
     infrastructure/
       adapters/
@@ -238,7 +335,7 @@ tests/
           postgres/
             test_postgres.py       # runs PostgresAdapter against a real database
   e2e/
-    test_cli.py                    # runs the cli entrypoint with the production factories
+    test_cli.py                    # where the project has end-to-end tests: runs the startup code
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:
@@ -247,10 +344,47 @@ A test imports the entity under test from its export file and its test adapters 
 # tests/unit/core/order_processor/test_order_processor.py
 from core.order_processor import OrderProcessor, OrderProcessorImpl
 
-from .adapters import FakePaymentAdapter
+from .adapters import FakeOrderProcessorAdapter
 ```
 
-The tests for `Checkout` do not import `FakePaymentAdapter` or anything else from the order processor's tests. `Checkout` has its own port, so its tests have their own test adapter.
+The tests for `Checkout` do not import `FakeOrderProcessorAdapter` or anything else from the order processor's tests. `Checkout` has its own port, so its tests have their own test adapter. The two `FakeOrderProcessor` test adapters are duplicated for the same reason.
+
+## Example 5: legacy code
+
+A project has a legacy `billing.py` that already talks to Stripe. A new `OrderProcessor` module reaches it through its port, with an adapter named for it:
+
+```
+src/
+  billing.py                     # legacy code, left where it is
+  core/
+    order_processor/
+  infrastructure/
+    adapters/
+      order_processor/
+        legacy_billing/
+          __init__.py
+          adapter.py             # LegacyBillingAdapter: satisfies OrderProcessorPort by calling billing.py
+```
+
+```python
+# infrastructure/adapters/order_processor/legacy_billing/adapter.py
+import billing
+
+from core.domain.currency import Currency
+from core.order_processor import OrderProcessorPort
+
+class LegacyBillingAdapter(OrderProcessorPort):
+    def charge(self, amount: int, currency: Currency) -> bool:
+        return billing.take_payment(amount / 100, currency) == "ok"
+```
+
+Legacy code that needs an `OrderProcessor` calls the factory and drives the interface:
+
+```python
+# src/views.py, legacy code
+from infrastructure.factories.order_processor import create_order_processor   # good: a factory
+from core.order_processor import OrderProcessorImpl                          # bad: the constructor
+```
 
 ## Checking the rules
 

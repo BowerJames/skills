@@ -6,10 +6,12 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 
 | Term | Python |
 |---|---|
-| **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
+| **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[Order], Receipt]` |
 | **Port** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
 | **Adapter** | a class or function satisfying the port's shape |
-| **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the ports and returns it |
+| **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the port and returns it |
+| **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
+| **Error** | an `Exception` subclass |
 
 ## Module
 
@@ -35,37 +37,76 @@ The rest of the module is the same whichever spelling is used.
 ```python
 from typing import Literal, Protocol
 
-class PaymentPort(Protocol): # Port defined for the module
-    def charge(self, amount: float) -> bool: ...
+type Currency = Literal["GBP", "USD", "EUR"] # Data carrier: its only invariant is the one its type expresses
+
+class OrderProcessorPort(Protocol): # The module's one port: everything it needs from outside itself
+    def charge(self, amount: int, currency: Currency) -> bool: ...
+
+class PaymentDeclined(Exception): # An error the module's implementation determines, so the module owns it
+    ...
 
 class OrderProcessorImpl: # Implementation of the module
     def __init__(
         self,
-        payment: PaymentPort
+        port: OrderProcessorPort, # the port
+        currency: Currency # configuration
     ): # Constructor for the module
-        self.payment = payment
+        self.port = port
+        self.currency = currency
 
     def __call__(self, order: Order) -> Receipt:
-        ...
+        total = sum(item.cost for item in order.items)
+        if not self.port.charge(total, self.currency):
+            raise PaymentDeclined(order.id)
+        return Receipt(total=total, currency=self.currency)
 
-class StripeAdapter(PaymentPort): # Adapter for the payment port
+class StripeAdapter(OrderProcessorPort): # Adapter for the port
     def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
 
-    def charge(self, amount: float) -> bool: ...
+    def charge(self, amount: int, currency: Currency) -> bool: ...
 
-class PaypalAdapter(PaymentPort): # Adapter for the payment port
+class PaypalAdapter(OrderProcessorPort): # Adapter for the port
     def __init__(self, api_key: str, http: HTTP): ... # Constructor for the paypal adapter
 
-    def charge(self, amount: float) -> bool: ...
+    def charge(self, amount: int, currency: Currency) -> bool: ...
 
 def create_order_processor(
-        type: Literal["stripe", "paypal"]
+        provider: Literal["stripe", "paypal"],
+        api_key: str,
+        currency: Currency
     ) -> OrderProcessor: # A factory for the order processor module
-    if type == "stripe":
-        payment = StripeAdapter(...)
-    elif type == "paypal":
-        payment = PaypalAdapter(...)
-    return OrderProcessorImpl(payment)
+    if provider == "stripe":
+        port = StripeAdapter(api_key, RealHTTP())
+    elif provider == "paypal":
+        port = PaypalAdapter(api_key, RealHTTP())
+    return OrderProcessorImpl(port, currency)
 ```
 
-Matching is structural: any class with a matching `charge` satisfies `PaymentPort`. An adapter inherits from the port it satisfies anyway (`class StripeAdapter(PaymentPort)`). The inheritance is a reminder, not a requirement: it links the adapter to the port it is intended for, so a developer reading the adapter can see the dependency.
+Matching is structural: any class with a matching `charge` satisfies `OrderProcessorPort`. An adapter inherits from the port it satisfies anyway (`class StripeAdapter(OrderProcessorPort)`). The inheritance is a reminder, not a requirement: it links the adapter to the port it is intended for, so a developer reading the adapter can see the dependency.
+
+## Errors
+
+The adapter handles what it can decide and lets everything else propagate:
+
+```python
+class StripeAdapter(OrderProcessorPort):
+    def __init__(self, api_key: str, http: HTTP):
+        self.api_key = api_key
+        self.http = http
+
+    def charge(self, amount: int, currency: Currency) -> bool:
+        response = self.http(Request(...)) # a network error propagates unchanged
+        if response.status == 402:
+            return False # handled: a decline is an answer the port can give
+        return True
+```
+
+Wrapping hides the error's origin:
+
+```python
+    def charge(self, amount: int, currency: Currency) -> bool:
+        try:
+            response = self.http(Request(...))
+        except ConnectionError as error:
+            raise PaymentFailed() from error # bad: wraps an error the adapter did not determine
+```

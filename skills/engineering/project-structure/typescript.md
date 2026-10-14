@@ -8,10 +8,11 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Type
 |---|---|
 | **Package** | a directory with an `index.ts` |
 | **Export file** | the package's `index.ts`, re-exporting names |
-| **Data carrier** | an `interface` or `type` of plain, `readonly` data |
-| **Domain package** | `core/domain`, with one file per concept — `core/domain/order.ts` |
+| **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
+| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts` |
 | **Factory package** | `infrastructure/factories/<module-name>`, with the factories in `factory.ts` |
-| **Entrypoint** | a file in `infrastructure/entrypoints` — `infrastructure/entrypoints/cli.ts` |
+| **Entrypoint** | a function returned by a constructor in `infrastructure/entrypoints` — `newCli` in `infrastructure/entrypoints/cli.ts` |
+| **Startup code** | a file beside the entrypoint that calls it — `infrastructure/entrypoints/cli.start.ts` |
 
 **Package** here is a directory in one project, not an npm package. An ES module is a file; in these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.ts` file.
 
@@ -19,19 +20,20 @@ Directories are kebab-case, so `<module_name>` in the rules is spelled `order-pr
 
 ## Example 1: a module and its adapters
 
-An `OrderProcessor` module charges for an order through a `PaymentPort`. Stripe and PayPal each satisfy that port.
+An `OrderProcessor` module charges for an order through its `OrderProcessorPort`. A Stripe adapter and a PayPal adapter each satisfy that port.
 
 ```
 src/
   core/
     domain/
-      order.ts                 # Order, OrderItem
-      receipt.ts               # Receipt
+      currency.ts              # Currency
     order-processor/
       index.ts                 # the export file
       interface.ts             # OrderProcessor
+      port.ts                  # OrderProcessorPort
+      data.ts                  # Order, OrderItem, Receipt
+      errors.ts                # PaymentDeclined
       implementation.ts        # newOrderProcessor; could be several files
-      ports.ts                 # PaymentPort
   infrastructure/
     adapters/
       order-processor/
@@ -49,32 +51,68 @@ src/
         factory.ts             # createOrderProcessor
     entrypoints/
       cli.ts
+      cli.start.ts
 ```
 
-The interface, the implementation and the ports each have their own file:
+`Currency` means the same thing to every module and belongs to none, so it is in the domain package. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the module's data file:
+
+```ts
+// src/core/domain/currency.ts
+export type Currency = "GBP" | "USD" | "EUR";
+```
+
+```ts
+// src/core/order-processor/data.ts
+import type { Currency } from "../domain/currency";
+
+export interface OrderItem {
+  readonly name: string;
+  readonly cost: number; // in the currency's minor unit
+}
+
+export interface Order {
+  readonly id: string;
+  readonly items: readonly OrderItem[];
+}
+
+export interface Receipt {
+  readonly total: number;
+  readonly currency: Currency;
+}
+```
+
+The interface, the port, the errors and the implementation each have their own file:
 
 ```ts
 // src/core/order-processor/interface.ts
-import type { Order } from "../domain/order";
-import type { Receipt } from "../domain/receipt";
+import type { Order, Receipt } from "./data";
 
 export type OrderProcessor = (order: Order) => Receipt; // Interface for the module
 ```
 
 ```ts
-// src/core/order-processor/ports.ts
-export interface PaymentPort { // Port defined for the module
-  charge(amount: number): boolean;
+// src/core/order-processor/port.ts
+import type { Currency } from "../domain/currency";
+
+export interface OrderProcessorPort { // The module's port
+  charge(amount: number, currency: Currency): boolean;
 }
 ```
 
 ```ts
+// src/core/order-processor/errors.ts
+export class PaymentDeclined extends Error {} // Determined by the module's implementation
+```
+
+```ts
 // src/core/order-processor/implementation.ts
+import type { Currency } from "../domain/currency";
 import type { OrderProcessor } from "./interface";
-import type { PaymentPort } from "./ports";
+import type { OrderProcessorPort } from "./port";
 
 export function newOrderProcessor(
-  payment: PaymentPort,
+  port: OrderProcessorPort,
+  currency: Currency,
 ): OrderProcessor { // Constructor for the module
   return function processOrder(order) { // Implementation of the module
     /* ... */
@@ -84,25 +122,25 @@ export function newOrderProcessor(
 
 ```ts
 // src/core/order-processor/index.ts
+export type { Order, OrderItem, Receipt } from "./data";
+export { PaymentDeclined } from "./errors";
 export { newOrderProcessor } from "./implementation";
 export type { OrderProcessor } from "./interface";
-export type { PaymentPort } from "./ports";
+export type { OrderProcessorPort } from "./port";
 ```
-
-`Order` and `Receipt` appear in the `OrderProcessor` interface, so they are defined in the domain package from the start.
 
 An adapter imports the port from the module's export file:
 
 ```ts
 // src/infrastructure/adapters/order-processor/stripe/adapter.ts
-import type { PaymentPort } from "../../../../core/order-processor";       // good: the export file
-import type { PaymentPort } from "../../../../core/order-processor/ports"; // bad: reaches behind the export file
-import { newPaypalAdapter } from "../paypal";                              // bad: an adapter importing another adapter
-import type { Http } from "./http";                                        // good: the adapter's own port, defined in its own package
+import type { OrderProcessorPort } from "../../../../core/order-processor";      // good: the export file
+import type { OrderProcessorPort } from "../../../../core/order-processor/port"; // bad: reaches behind the export file
+import { newPaypalAdapter } from "../paypal";                                    // bad: an adapter importing another adapter
+import type { Http } from "./http";                                              // good: the adapter's own port, defined in its own package
 
-export function newStripeAdapter(apiKey: string, http: Http): PaymentPort { // Constructor for the stripe adapter
-  return { // Adapter for the payment port
-    charge(amount) { /* ... */ },
+export function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the stripe adapter
+  return { // Adapter for the module's port
+    charge(amount, currency) { /* ... */ },
   };
 }
 ```
@@ -120,19 +158,22 @@ The factory that chooses an adapter imports the adapters, so it lives in `infras
 
 ```ts
 // src/infrastructure/factories/order-processor/factory.ts
+import type { Currency } from "../../../core/domain/currency";
 import { newOrderProcessor } from "../../../core/order-processor";
 import type { OrderProcessor } from "../../../core/order-processor";
-import { newPaypalAdapter } from "../../adapters/order-processor/paypal";
-import { newStripeAdapter } from "../../adapters/order-processor/stripe";
+import * as paypal from "../../adapters/order-processor/paypal";
+import * as stripe from "../../adapters/order-processor/stripe";
 
 export function createOrderProcessor(
-  type: "stripe" | "paypal",
+  provider: "stripe" | "paypal",
+  apiKey: string,
+  currency: Currency,
 ): OrderProcessor { // A factory for the order processor module
-  switch (type) {
+  switch (provider) {
     case "stripe":
-      return newOrderProcessor(newStripeAdapter(/* ... */));
+      return newOrderProcessor(stripe.newStripeAdapter(apiKey, stripe.newRealHttp()), currency);
     case "paypal":
-      return newOrderProcessor(newPaypalAdapter(/* ... */));
+      return newOrderProcessor(paypal.newPaypalAdapter(apiKey, paypal.newRealHttp()), currency);
   }
 }
 ```
@@ -142,48 +183,81 @@ export function createOrderProcessor(
 export { createOrderProcessor } from "./factory";
 ```
 
-The entrypoint asks the factory for an entity and drives it through its interface. It calls no constructor and imports no adapter:
+The entrypoint's constructor takes the entity it drives, and the entrypoint translates between the outside world and data carriers:
 
 ```ts
 // src/infrastructure/entrypoints/cli.ts
-import type { Order } from "../../core/domain/order";
-import { createOrderProcessor } from "../factories/order-processor";
+import type { Order, OrderProcessor } from "../../core/order-processor";
 
-export function main(argv: string[]): void {
-  const orderProcessor = createOrderProcessor("stripe");
-  const order: Order = { /* ... */ };  // translate the outside world into a data carrier
-  const receipt = orderProcessor(order);
-  console.log(receipt);
+export function newCli(
+  orderProcessor: OrderProcessor, // Its constructor takes the interface it drives
+): (argv: string[]) => void { // The entrypoint: calls no module's constructor and no factory, imports no adapter
+  return function cli(argv) {
+    const [id, ...costs] = argv;
+    const order: Order = {
+      id,
+      items: costs.map((cost, i) => ({ name: `item_${i}`, cost: Number(cost) })),
+    }; // translate the outside world into a data carrier
+    const receipt = orderProcessor(order);
+    console.log(`total=${receipt.total} ${receipt.currency}`);
+  };
 }
+```
+
+The startup code beside it reads the environment, calls the factory and passes the entity to the entrypoint's constructor:
+
+```ts
+// src/infrastructure/entrypoints/cli.start.ts
+import { createOrderProcessor } from "../factories/order-processor";
+import { newCli } from "./cli";
+
+const cli = newCli(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP"));
+cli(process.argv.slice(2));
 ```
 
 ## Example 3: a module that needs another module
 
-A `Checkout` module is built on top of order processing. It does not import `core/order-processor`. It declares a port with the shape it needs:
+A `Checkout` module is built on top of order processing. It does not import `core/order-processor`. It declares its own data carriers and a port with the shape it needs:
 
 ```ts
-// src/core/checkout/ports.ts
-import type { Order } from "../domain/order";
-import type { Receipt } from "../domain/receipt";
+// src/core/checkout/data.ts
+export interface CartLine {
+  readonly product: string;
+  readonly price: number;
+}
 
-export interface OrderProcessingPort { // Port defined for the checkout module
-  process(order: Order): Receipt;
+export interface Cart {
+  readonly id: string;
+  readonly lines: readonly CartLine[];
 }
 ```
 
-An adapter under `infrastructure/adapters/checkout` satisfies the port by calling an `OrderProcessor` through its interface:
+```ts
+// src/core/checkout/port.ts
+import type { Cart } from "./data";
+
+export interface CheckoutPort { // The checkout module's port
+  pay(cart: Cart): number;
+}
+```
+
+An adapter under `infrastructure/adapters/checkout` satisfies the port by calling an `OrderProcessor` through its interface, translating between the two modules' data carriers:
 
 ```ts
 // src/infrastructure/adapters/checkout/order-processor/adapter.ts
-import type { OrderProcessingPort } from "../../../../core/checkout";
-import type { OrderProcessor } from "../../../../core/order-processor";
+import type { CheckoutPort } from "../../../../core/checkout";
+import type { Order, OrderProcessor } from "../../../../core/order-processor";
 
 export function newOrderProcessorAdapter(
   orderProcessor: OrderProcessor, // Constructor takes the interface, never the implementation
-): OrderProcessingPort { // Adapter connecting checkout to the order processor module
+): CheckoutPort { // Adapter connecting checkout to the order processor module
   return {
-    process(order) {
-      return orderProcessor(order);
+    pay(cart) {
+      const order: Order = {
+        id: cart.id,
+        items: cart.lines.map((line) => ({ name: line.product, cost: line.price })),
+      }; // checkout's data, translated into the order processor's
+      return orderProcessor(order).total;
     },
   };
 }
@@ -198,8 +272,8 @@ import type { Checkout } from "../../../core/checkout";
 import { newOrderProcessorAdapter } from "../../adapters/checkout/order-processor";
 import { createOrderProcessor } from "../order-processor";
 
-export function createCheckout(): Checkout { // A factory for the checkout module
-  const orderProcessor = createOrderProcessor("stripe");
+export function createCheckout(apiKey: string): Checkout { // A factory for the checkout module
+  const orderProcessor = createOrderProcessor("stripe", apiKey, "GBP");
   return newCheckout(newOrderProcessorAdapter(orderProcessor));
 }
 ```
@@ -211,17 +285,24 @@ tests/
   unit/
     core/
       order-processor/
-        order-processor.test.ts    # constructs with newOrderProcessor and a fake payment adapter
-        adapters.ts                # newFakePaymentAdapter: test adapters for this module's ports
+        order-processor.test.ts    # constructs with newOrderProcessor and a fake adapter
+        adapters.ts                # newFakeOrderProcessorAdapter: the test adapter for this module's port
       checkout/
         checkout.test.ts
-        adapters.ts                # newFakeOrderProcessingAdapter
+        adapters.ts                # newFakeCheckoutAdapter
     infrastructure/
       adapters/
         order-processor/
           stripe/
             stripe.test.ts         # constructs with newStripeAdapter and a fake http
             adapters.ts            # newFakeHttp
+        checkout/
+          order-processor/
+            order-processor.test.ts  # constructs with newOrderProcessorAdapter and a fake order processor
+            adapters.ts              # newFakeOrderProcessor
+      entrypoints/
+        cli.test.ts                # constructs with newCli and a fake order processor
+        adapters.ts                # newFakeOrderProcessor
   integration/
     infrastructure/
       adapters/
@@ -229,7 +310,7 @@ tests/
           postgres/
             postgres.test.ts       # runs the postgres adapter against a real database
   e2e/
-    cli.test.ts                    # runs the cli entrypoint with the production factories
+    cli.test.ts                    # where the project has end-to-end tests: runs the startup code
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:
@@ -237,10 +318,49 @@ A test imports the entity under test from its export file and its test adapters 
 ```ts
 // tests/unit/core/order-processor/order-processor.test.ts
 import { newOrderProcessor } from "../../../../src/core/order-processor";
-import { newFakePaymentAdapter } from "./adapters";
+import { newFakeOrderProcessorAdapter } from "./adapters";
 ```
 
-The tests for `Checkout` do not import `newFakePaymentAdapter` or anything else from the order processor's tests. `Checkout` has its own port, so its tests have their own test adapter.
+The tests for `Checkout` do not import `newFakeOrderProcessorAdapter` or anything else from the order processor's tests. `Checkout` has its own port, so its tests have their own test adapter. The two `newFakeOrderProcessor` test adapters are duplicated for the same reason.
+
+## Example 5: legacy code
+
+A project has a legacy `billing.ts` that already talks to Stripe. A new `OrderProcessor` module reaches it through its port, with an adapter named for it:
+
+```
+src/
+  billing.ts                     # legacy code, left where it is
+  core/
+    order-processor/
+  infrastructure/
+    adapters/
+      order-processor/
+        legacy-billing/
+          index.ts
+          adapter.ts             # newLegacyBillingAdapter: satisfies OrderProcessorPort by calling billing.ts
+```
+
+```ts
+// src/infrastructure/adapters/order-processor/legacy-billing/adapter.ts
+import { takePayment } from "../../../../billing";
+import type { OrderProcessorPort } from "../../../../core/order-processor";
+
+export function newLegacyBillingAdapter(): OrderProcessorPort {
+  return {
+    charge(amount, currency) {
+      return takePayment(amount / 100, currency) === "ok";
+    },
+  };
+}
+```
+
+Legacy code that needs an `OrderProcessor` calls the factory and drives the interface:
+
+```ts
+// src/views.ts, legacy code
+import { createOrderProcessor } from "./infrastructure/factories/order-processor"; // good: a factory
+import { newOrderProcessor } from "./core/order-processor";                        // bad: the constructor
+```
 
 ## Checking the rules
 
