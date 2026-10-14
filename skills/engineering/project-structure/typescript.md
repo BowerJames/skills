@@ -38,9 +38,11 @@ src/
         stripe/
           index.ts             # the export file
           adapter.ts           # newStripeAdapter
+          http.ts              # Http, newRealHttp: the adapter's own port and what satisfies it
         paypal/
           index.ts             # the export file
           adapter.ts           # newPaypalAdapter
+          http.ts              # Http, newRealHttp
     factories/
       order-processor/
         index.ts               # the export file
@@ -96,6 +98,7 @@ An adapter imports the port from the module's export file:
 import type { PaymentPort } from "../../../../core/order-processor";       // good: the export file
 import type { PaymentPort } from "../../../../core/order-processor/ports"; // bad: reaches behind the export file
 import { newPaypalAdapter } from "../paypal";                              // bad: an adapter importing another adapter
+import type { Http } from "./http";                                        // good: the adapter's own port, defined in its own package
 
 export function newStripeAdapter(apiKey: string, http: Http): PaymentPort { // Constructor for the stripe adapter
   return { // Adapter for the payment port
@@ -241,4 +244,4 @@ The tests for `Checkout` do not import `newFakePaymentAdapter` or anything else 
 
 ## Checking the rules
 
-ESLint's `no-restricted-imports` can enforce the export file by banning paths that reach past a package's `index.ts`. [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) can enforce the import rules with `forbidden` rules: one stops `src/core` importing from `src/infrastructure`, one stops `src/core/domain` importing from any module's package, and one stops a module's package importing another module's package. A `forbidden` rule on npm dependencies can also stop `src/core` importing third-party libraries that reach a resource.
+ESLint's `no-restricted-imports` can enforce the export file by banning paths that reach past a package's `index.ts`. It can also keep constructors to the factories: constructors are named `new…`, so a pattern on `src/core` with `importNamePattern: "^new"` bans importing them, and an override switches the rule off for `src/infrastructure/factories` and `tests`. [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) can enforce the import rules with `forbidden` rules: one stops `src/core` importing from `src/infrastructure`, one stops `src/core/domain` importing from any module's package, and one stops a module's package importing another module's package. A `forbidden` rule on npm dependencies can also stop `src/core` importing third-party libraries that reach a resource.

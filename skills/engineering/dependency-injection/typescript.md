@@ -49,7 +49,7 @@ function newOrderProcessor(
 }
 ```
 
-A `Refunds` module that also needs Stripe declares its own port. Each module has its own adapter, and the two adapters are thin wrappers around the same logic:
+A `Refunds` module that also needs Stripe declares its own port. Each module has its own adapter, and the two adapters are thin wrappers around the same resource:
 
 ```ts
 interface RefundPort { // Port defined for the refunds module

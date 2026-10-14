@@ -1,12 +1,13 @@
 ---
 name: test-driven-development
-description: Development methodology for driving development through tests. Use this when you are adding, enhancing or amending modules.
+description: Development methodology for driving development through tests. Use this when you are adding, enhancing or amending modules. Requires the codebase-design, testing and project-structure skills.
 ---
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, resource).
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, data carrier, resource).
 - **[testing](../testing/SKILL.md)** — read it first. This skill uses its vocabulary (entity under test, test adapter, test harness, ...).
+- **[project-structure](../project-structure/SKILL.md)** — where the files created in each cycle go.
 
 # Test-driven development
 

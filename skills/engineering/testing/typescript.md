@@ -95,7 +95,7 @@ function newStripeAdapter(apiKey: string, http: Http): PaymentPort { // everythi
 ```
 
 ```ts
-function newFakeHttp() { // a test adapter for what the adapter's constructor takes
+function newFakeHttp() { // a test adapter for the adapter's own port
   const requests: HttpRequest[] = [];
   const http: Http = (request) => {
     requests.push(request);
@@ -126,8 +126,9 @@ test("saves and loads an order", () => { // runs against the real resource
 ```ts
 // tests/e2e/cli.test.ts
 test("cli processes an order", () => { // runs an entrypoint with the production factories
-  const output = main(["process", "--price", "100"]);
-  expect(output).toContain("total=100");
+  const log = vi.spyOn(console, "log");
+  main(["process", "--price", "100"]);
+  expect(log).toHaveBeenCalledWith({ total: 100 });
 });
 ```
 

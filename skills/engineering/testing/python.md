@@ -34,11 +34,11 @@ class OrderProcessorImpl:
 The test adapter — a working fake, no mock library:
 
 ```python
-class FakePaymentAdapter:                    # a test adapter: decides what comes in, records what goes out
+class FakePaymentAdapter(PaymentPort):       # a test adapter: decides what comes in, records what goes out
     def __init__(self) -> None:
         self.charges: list[float] = []
 
-    def charge(self, amount: float) -> bool: # satisfies the port by shape — no inheritance
+    def charge(self, amount: float) -> bool: # satisfies the port; the inheritance is a reminder of which one
         self.charges.append(amount)          # records what goes out through the port
         return True                          # decides what comes in
 ```
@@ -85,7 +85,7 @@ class StripeAdapter(PaymentPort):
 ```
 
 ```python
-class FakeHTTP:                                  # a test adapter for what the adapter's constructor takes
+class FakeHTTP:                                  # a test adapter for the adapter's own port; HTTP is a type, so there is nothing to inherit
     def __init__(self) -> None:
         self.requests: list[Request] = []
 

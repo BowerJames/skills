@@ -68,7 +68,9 @@ The next behaviour to pin would be that an order processor charges the total of 
 
 ```python
 # tests/unit/core/order_processor/adapters.py
-class FakePaymentAdapter:
+from core.order_processor import PaymentPort
+
+class FakePaymentAdapter(PaymentPort):
     def __init__(self):
         self.charges = []
 

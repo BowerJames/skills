@@ -39,9 +39,11 @@ src/
         stripe/
           __init__.py          # the export file
           adapter.py           # StripeAdapter
+          http.py              # HTTP, RealHTTP: the adapter's own port and what satisfies it
         paypal/
           __init__.py          # the export file
           adapter.py           # PaypalAdapter
+          http.py              # HTTP, RealHTTP
     factories/
       order_processor/
         __init__.py            # the export file
@@ -107,6 +109,8 @@ An adapter imports the port from the module's export file:
 from core.order_processor import PaymentPort                       # good: the export file
 from core.order_processor.ports import PaymentPort                 # bad: reaches behind the export file
 from infrastructure.adapters.order_processor.paypal import ...     # bad: an adapter importing another adapter
+
+from .http import HTTP                                             # good: the adapter's own port, defined in its own package
 
 class StripeAdapter(PaymentPort): # Adapter for the payment port
     def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
@@ -251,3 +255,5 @@ The tests for `Checkout` do not import `FakePaymentAdapter` or anything else fro
 ## Checking the rules
 
 [import-linter](https://import-linter.readthedocs.io/) can enforce the import rules: a `layers` contract places `infrastructure` above `core`, a `forbidden` contract stops `core.domain` importing from any module's package, and an `independence` contract stops the packages of modules importing each other. A `forbidden` contract with `include_external_packages` can also stop `core` importing third-party libraries that reach a resource.
+
+import-linter works on files, not names, so it cannot tell an import of `OrderProcessorImpl` from an import of `OrderProcessor`. Ruff's `banned-api` setting (rule `TID251`) can: ban each constructor by its full name, `core.order_processor.OrderProcessorImpl`, and switch the rule off with `per-file-ignores` for `src/infrastructure/factories/` and `tests/`.

@@ -118,7 +118,7 @@ export function newStripeOrderProcessor(): OrderProcessor { // A second construc
 }
 ```
 
-## Rule 4: a factory gets another module's entity from that module's factory
+## Rule 4: a factory never calls another module's constructor
 
 A `Checkout` module has a port satisfied by an adapter that calls an `OrderProcessor`.
 
@@ -131,11 +131,17 @@ function createCheckout(): Checkout {
 }
 ```
 
-Good example:
+Good examples:
 
 ```ts
 function createCheckout(): Checkout {
   const orderProcessor = createOrderProcessor("stripe"); // Another module's factory
+  return newCheckout(newOrderProcessorAdapter(orderProcessor));
+}
+```
+
+```ts
+function createCheckout(orderProcessor: OrderProcessor): Checkout { // The entity is taken as a parameter
   return newCheckout(newOrderProcessorAdapter(orderProcessor));
 }
 ```
@@ -149,21 +155,29 @@ function createOrderProcessor(
   type: "stripe" | "paypal", // A parameter that selects between choices
 ): OrderProcessor {
   const currency = process.env.CURRENCY!; // Configuration for the module, read here and not in the constructor
-  const http = newRealHttp();             // The factory constructs what the adapters need
   switch (type) {
     case "stripe":
-      return newOrderProcessor(newStripeAdapter(process.env.STRIPE_API_KEY!, http), currency); // The factory reaches the resource and passes the value on
+      return newOrderProcessor(
+        newStripeAdapter(
+          process.env.STRIPE_API_KEY!, // The factory reaches the resource and passes the value on
+          stripe.newRealHttp(),        // The factory constructs what the adapter's own port needs, from the adapter's package
+        ),
+        currency,
+      );
     case "paypal":
-      return newOrderProcessor(newPaypalAdapter(process.env.PAYPAL_API_KEY!, http), currency);
+      return newOrderProcessor(
+        newPaypalAdapter(process.env.PAYPAL_API_KEY!, paypal.newRealHttp()),
+        currency,
+      );
   }
 }
 ```
 
-Bad example:
+What a factory takes depends on its use case. This one takes the adapter and supplies only the configuration:
 
 ```ts
 function createOrderProcessor(
-  payment: PaymentPort, // Takes a port, so this is a second constructor and not a factory
+  payment: PaymentPort, // An adapter chosen by the caller
 ): OrderProcessor {
   return newOrderProcessor(payment, process.env.CURRENCY!);
 }

@@ -1,11 +1,12 @@
 ---
 name: project-structure
-description: Policy for where code lives on disk. Use when you need to create new modules, adapters, factories or deciding where code should belong.
+description: Policy for where code lives on disk. Use when you need to create new modules, adapters, factories, entrypoints or tests, or deciding where code should belong. Requires the codebase-design and testing skills.
 ---
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, implementation, constructor, port, adapter, factory, resource, behaviour) exactly.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, implementation, constructor, port, adapter, factory, data carrier, resource, behaviour) exactly.
+- **[testing](../testing/SKILL.md)** — its vocabulary for the kinds of test and where they point: entity under test, test adapter, unit test, integration test, end-to-end test.
 
 # Project Structure
 
@@ -46,10 +47,6 @@ _Avoid_: folder (says nothing about ownership), module (already means an interfa
 
 _Avoid_: public API (interface already names what callers must know), barrel (names the mechanism, not the role), entry point (too close to entrypoint).
 
-**Data carrier** — a type that holds data and its invariants and reaches no resource: `Order`, `Receipt`, `Money`. It has no implementation behind it, so modules take and return it as its concrete type, not through an interface of its own.
-
-_Avoid_: model (overloaded with ORMs and machine learning), DTO, entity (already means any code construct).
-
 **Domain package** — the `core/domain` package, holding the data carriers. One file per concept, named for the concept. `domain` is a reserved name: no module is called `domain`.
 
 _Avoid_: utils, common, shared, helpers (names that say only that something is shared, so they accept anything).
@@ -76,7 +73,7 @@ This improves **testability for everyone** since a module can be constructed wit
 
 ### 2. The core holds modules and data carriers, nothing else
 
-- **The domain package holds data carriers only.** Anything that carries behaviours is not a data carrier. It is either a module in the core or an adapter in the infrastructure.
+- **The domain package holds data carriers only.** A data carrier has fields and its invariants, and no other methods. Anything that carries behaviours, including a computation over a data carrier's own fields, is not a data carrier. It is either a module in the core or an adapter in the infrastructure.
 - **Every other package in the core is a module.** It has an interface, an implementation and ports. The core holds no adapters, no factories and no entrypoints.
 - **A module never imports another module.** A module that needs another module declares a port for it. An adapter in `infrastructure/adapters/<module_name>` satisfies that port by calling the other module through its interface.
 - **The core imports a third-party library only if the library reaches no resource internally.** A library that reaches a resource internally is imported only from the infrastructure, behind an adapter.
@@ -96,7 +93,11 @@ A module's package is `core/<module_name>`. It holds:
 - **implementation** — the module's implementation and its constructor. A package can organise its implementation however it wants: one file, or as many files and directories as it needs.
 - **the export file** — exports the interface, the ports and the constructor. Nothing else in the implementation is exported.
 
-Callers and entrypoints import the interface, adapters import the ports, and the module's factory package imports the constructor.
+Each export has its own importers:
+
+- **The interface** may be imported by anything in the infrastructure: entrypoints, factories, and adapters that connect another module to this one.
+- **The ports** are imported by the adapters that satisfy them, and by test adapters.
+- **The constructor** is imported only by the module's factory package and by the module's unit tests. An entrypoint or an adapter never imports it.
 
 This improves **leverage for callers** since the interface file shows everything a caller must know and nothing else.
 
@@ -112,7 +113,9 @@ An adapter that connects one module to another is named for the module it calls:
 
 - An adapter imports the port it satisfies from the module's export file, and data carriers from the domain package.
 - An adapter that connects one module to another also imports the other module's interface from its export file, and receives the entity through its own constructor.
-- An adapter never imports another adapter. Only the factory package of the same module imports it.
+- An adapter never imports another adapter. Within `src`, only the factory package of the same module imports it.
+- An adapter's package organises its contents however it wants. Whatever the adapter's constructor takes — its own ports, and the adapters that satisfy them — is defined inside the adapter's package.
+- Two adapters that reach the same resource share no code. Each is a thin wrapper around the same resource or library, and each holds what it needs.
 
 This improves **locality for maintainers** since the path of an adapter names the module it serves, and everything that knows about one resource for one module is in one package.
 
@@ -124,7 +127,7 @@ A module's factories live in `infrastructure/factories/<module_name>`, where `<m
 
 - A factory package imports its module's constructor and interface from the module's export file, and that module's adapters from their export files.
 - A factory declares the module's interface as its return type, never the implementation.
-- A factory that needs an entity of another module calls a factory from that module's factory package and passes the entity to the adapter that connects the two. It never calls another module's constructor.
+- A factory that needs an entity of another module calls a factory from that module's factory package, or takes the entity as a parameter, and passes it to the adapter that connects the two. It never calls another module's constructor.
 
 This improves **locality for maintainers** since the choice of adapters for a module is made in one package, and its path names the module.
 
@@ -142,15 +145,13 @@ A data carrier that appears in a module's interface or in one of its ports is us
 
 A type used only inside one module's implementation stays in that module's package and is not exported.
 
-A module that reads only a slice of a data carrier may declare its own interface with just the fields it reads instead of importing the data carrier.
-
 This improves **locality for maintainers** since each data carrier has exactly one definition, in a place every package is allowed to import from.
 
 ### 8. Name a package for what it is, not for being shared
 
 There is no `utils`, `common`, `shared` or `helpers` package. A helper used by one package stays in that package. Duplicate a small helper until its second or third use, then decide:
 
-- If it hides real complexity it is a module: give it an interface, ports and a package named for what it does (`retry`). Other modules reach it through a port and an adapter.
+- If it meets one of the reasons in codebase-design's "When to make a module", it is a module: give it an interface, ports and a package named for what it does (`retry`). Other modules reach it through a port and an adapter.
 - Otherwise the duplication was the right call.
 
 A helper never goes in the domain package: it carries behaviour, and the domain package holds data carriers only.
@@ -161,7 +162,7 @@ This improves **locality for maintainers** since nothing accumulates in a place 
 
 ### 9. Tests mirror the source tree
 
-Tests live in `tests`, outside `src`, split at the top by kind of test: `unit`, `integration` and `e2e` (see [testing](../testing/SKILL.md) for what each kind is).
+Tests live in `tests`, outside `src`, split at the top by kind of test: `unit`, `integration` and `e2e`.
 
 - **A test mirrors the path of the entity under test.** The unit tests for `src/core/<module_name>` are in `tests/unit/core/<module_name>`. The integration tests for an adapter are at the same mirrored path under `tests/integration`. End-to-end tests are named for the entrypoint they run.
 - **A test adapter lives beside the tests of the entity whose port it satisfies.** It is never under `src`, and never in a shared `fakes` package.

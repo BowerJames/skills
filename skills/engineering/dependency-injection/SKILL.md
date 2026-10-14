@@ -5,7 +5,7 @@ description: Discipline for what a constructor receives. Covers depending on a m
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, resource) exactly.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, data carrier, resource) exactly.
 
 # Dependency Injection
 
@@ -18,12 +18,12 @@ Dependency injection is passing an entity its dependencies instead of letting it
 Every parameter of a module's constructor that carries behaviour is a port: an interface the module declares itself.
 
 - **A port is an interface, never an implementation.** A constructor never names an adapter's type.
-- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare their own port. Their adapters can be thin wrappers around the same logic: the adapter decides how each module uses it.
+- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare their own port. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
 - **A port holds only what the module calls.** It is shaped by the module's needs, not copied from the adapter that will satisfy it.
 
 Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. An object from a library that reaches no resource is configuration, not a port.
 
-An adapter's constructor is not limited to ports: it can take other adapters, or anything else it needs. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An adapter's constructor is not limited to ports declared by a module: it can take ports of its own, satisfied by other adapters, or anything else it needs. Like every constructor, it must take everything required to measure the adapter's behaviours.
 
 This improves **flexibility for designers** since a new adapter adds a capability without touching the module.
 
@@ -35,7 +35,7 @@ This improves **testability for everyone** since test adapters can be passed to 
 
 Anything that changes the behaviour of an entity is passed to its constructor: as a port if it is an interface, as configuration if it is a value.
 
-- **The interface takes only data carriers.** A method on the interface never takes a port or a configuration value.
+- **The interface takes only data.** A method on the interface takes data carriers and plain values supplied by the caller. It never takes a port or a configuration value.
 - **A constructor accepts what it needs. It never creates it and never fetches it.** The implementation does not construct an adapter, read an environment variable, read the clock or open a connection. Each of those arrives through the constructor.
 
 This improves **leverage for callers** since the interface for the module stays simpler, increasing the capability per unit of complexity in the interface.

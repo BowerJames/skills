@@ -116,7 +116,7 @@ class OrderProcessorImpl:
         return cls(StripeAdapter(...))
 ```
 
-## Rule 4: a factory gets another module's entity from that module's factory
+## Rule 4: a factory never calls another module's constructor
 
 A `Checkout` module has a port satisfied by an adapter that calls an `OrderProcessor`.
 
@@ -128,11 +128,16 @@ def create_checkout() -> Checkout:
     return CheckoutImpl(OrderProcessorAdapter(order_processor))
 ```
 
-Good example:
+Good examples:
 
 ```python
 def create_checkout() -> Checkout:
     order_processor = create_order_processor("stripe") # Another module's factory
+    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+```
+
+```python
+def create_checkout(order_processor: OrderProcessor) -> Checkout: # The entity is taken as a parameter
     return CheckoutImpl(OrderProcessorAdapter(order_processor))
 ```
 
@@ -144,22 +149,27 @@ The factory reads the environment and passes what it reads to the constructors:
 def create_order_processor(
         type: Literal["stripe", "paypal"] # A parameter that selects between choices
     ) -> OrderProcessor:
-    http = RealHTTP() # The factory constructs what the adapters need
     if type == "stripe":
-        payment = StripeAdapter(api_key=os.environ["STRIPE_API_KEY"], http=http) # The factory reaches the resource and passes the value on
+        payment = StripeAdapter(
+            api_key=os.environ["STRIPE_API_KEY"], # The factory reaches the resource and passes the value on
+            http=stripe.RealHTTP() # The factory constructs what the adapter's own port needs, from the adapter's package
+        )
     elif type == "paypal":
-        payment = PaypalAdapter(api_key=os.environ["PAYPAL_API_KEY"], http=http)
+        payment = PaypalAdapter(
+            api_key=os.environ["PAYPAL_API_KEY"],
+            http=paypal.RealHTTP()
+        )
     return OrderProcessorImpl(
         payment,
         currency=os.environ["CURRENCY"] # Configuration for the module, read here and not in the constructor
     )
 ```
 
-Bad example:
+What a factory takes depends on its use case. This one takes the adapter and supplies only the configuration:
 
 ```python
 def create_order_processor(
-        payment: PaymentPort # Takes a port, so this is a second constructor and not a factory
+        payment: PaymentPort # An adapter chosen by the caller
     ) -> OrderProcessor:
     return OrderProcessorImpl(payment, currency=os.environ["CURRENCY"])
 ```

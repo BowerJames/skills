@@ -36,9 +36,9 @@ A module has a single constructor. Each factory is one way of supplying it: one 
 
 This improves **flexibility for designers** since a new combination of adapters is added without touching the module.
 
-### 4. A factory gets another module's entity from that module's factory
+### 4. A factory never calls another module's constructor
 
-A factory that needs an entity of another module calls one of that module's factories. It never calls another module's constructor.
+A factory that needs an entity of another module calls one of that module's factories, or takes the entity as a parameter. It never calls another module's constructor.
 
 This improves **locality for maintainers** since the knowledge of how a module is built stays with that module's factories.
 
@@ -46,7 +46,7 @@ This improves **locality for maintainers** since the knowledge of how a module i
 
 A factory may reach resources directly: read an environment variable, read a settings file, open a connection. It passes what it reads to constructors, as configuration or as constructed adapters.
 
-A factory may take parameters that select between choices, such as which adapter to use. It never takes a port or an adapter as a parameter: code that takes ports is a constructor.
+What a factory takes is a design decision that depends on its use case. It may take nothing, parameters that select between choices, adapters, entities of other modules, or anything else. Whether it builds a new entity on every call or returns one it has kept is a design decision too. What makes it a factory is that it calls the module's constructor and returns the entity.
 
 This improves **locality for maintainers** since the places where the program touches its environment are the factories and the adapters they construct, and nowhere else.
 

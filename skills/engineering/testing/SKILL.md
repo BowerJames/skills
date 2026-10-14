@@ -5,7 +5,7 @@ description: Discipline for testing entities through their constructors and inte
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, resource) exactly, especially one of its principles: an entity's interface and constructor are the test surface.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, data carrier, resource) exactly, especially one of its principles: an entity's interface and constructor are the test surface.
 
 # Testing
 
@@ -27,7 +27,7 @@ _Avoid_: test framework (too restrictive, doesn't cover the helper functions and
 
 **Integration test** — a test that verifies a **Behaviour** of an adapter against the **Resource** it reaches. It is used only when the behaviour cannot be measured with test adapters.
 
-_Avoid_: using it for any test that covers more than one entity.
+_Avoid_: contract test, and integration test as a name for any test that covers more than one entity.
 
 **End-to-end test** — a test that runs an entrypoint with the production factories, to show that the entities are wired together correctly.
 

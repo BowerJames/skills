@@ -15,11 +15,11 @@ A prerequisite chain — install together:
 Testing:
 
 - **[testing](skills/engineering/testing/SKILL.md)** — testing entities through their constructors and interfaces: one behaviour per test, a test adapter for every port. *Requires codebase-design.*
-- **[test-driven-development](skills/engineering/test-driven-development/SKILL.md)** — driving development through tests: the red → green loop, one behaviour per cycle. *Requires codebase-design and testing.*
+- **[test-driven-development](skills/engineering/test-driven-development/SKILL.md)** — driving development through tests: the red → green loop, one behaviour per cycle. *Requires codebase-design, testing and project-structure.*
 
 Structure:
 
-- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: modules and data carriers in the core, adapters, factories and entrypoints in the infrastructure, imports pointing inward, tests mirroring the source tree. *Requires codebase-design.*
+- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: modules and data carriers in the core, adapters, factories and entrypoints in the infrastructure, imports pointing inward, tests mirroring the source tree. *Requires codebase-design and testing.*
 
 ### Utils
 

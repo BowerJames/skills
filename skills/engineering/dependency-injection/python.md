@@ -53,7 +53,7 @@ class OrderProcessorImpl:
     def __call__(self, order: Order) -> Receipt: ...
 ```
 
-A `Refunds` module that also needs Stripe declares its own port. Each module has its own adapter, and the two adapters are thin wrappers around the same logic:
+A `Refunds` module that also needs Stripe declares its own port. Each module has its own adapter, and the two adapters are thin wrappers around the same resource:
 
 ```python
 class RefundPort(Protocol): # Port defined for the refunds module
