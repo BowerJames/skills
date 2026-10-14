@@ -2,9 +2,9 @@
 
 Skills I use daily for code work.
 
-- **[codebase-design](./codebase-design/SKILL.md)**: Shared vocabulary for designing deep modules: small interfaces, seams placed in factories, testable through the factory and interface.
-- **[dependency-injection](./dependency-injection/SKILL.md)**: Wiring modules together: code against interfaces, declare seams in factories.
-- **[factory-pattern](./factory-pattern/SKILL.md)**: The code that creates an entity satisfying a module's interface: declare the interface as the return type, never a concrete.
-- **[testing](./testing/SKILL.md)**: Testing modules through their factories and interfaces: one behaviour per test, test adapters at the seams, independent expectations.
-- **[test-driven-development](./test-driven-development/SKILL.md)**: Driving development through tests: the red → green loop, one behaviour per cycle, the factory and interface evolving with the tests.
-- **[project-structure](./project-structure/SKILL.md)**: Where code lives on disk: one package and entry point per module, shared data carriers placed at first use and moved at second use, imports pointing one way.
+- **[codebase-design](./codebase-design/SKILL.md)**: Shared vocabulary for designing modules: small interfaces, ports declared in the constructor, testable through the constructor and interface.
+- **[dependency-injection](./dependency-injection/SKILL.md)**: What a constructor receives: a module depends on its own ports, and ports and configuration go in the constructor, not the interface.
+- **[factory-pattern](./factory-pattern/SKILL.md)**: The code that calls a module's constructor and returns the entity: return the interface, hold no behaviour, reach resources here and pass them on.
+- **[testing](./testing/SKILL.md)**: Testing entities through their constructors and interfaces: one behaviour per test, a test adapter for every port, independent expectations.
+- **[test-driven-development](./test-driven-development/SKILL.md)**: Driving development through tests: the red → green loop, one behaviour per cycle, the constructor and interface evolving with the tests.
+- **[project-structure](./project-structure/SKILL.md)**: Where code lives on disk: modules and data carriers in the core, adapters, factories and entrypoints in the infrastructure, imports pointing inward, tests mirroring the source tree.

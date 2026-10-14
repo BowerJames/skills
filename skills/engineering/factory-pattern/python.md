@@ -2,80 +2,164 @@
 
 The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [codebase-design's python.md](../codebase-design/python.md).
 
-## Example
-
-Bad example for a `PaymentGateway` module:
+The examples build on this `OrderProcessor` module and its adapters:
 
 ```python
-class PaymentGateway(Protocol):
+class PaymentPort(Protocol): # Port defined for the module
+    def charge(self, amount: float) -> bool: ...
+
+class OrderProcessor(Protocol): # Interface for the module
+    def __call__(self, order: Order) -> Receipt: ...
+
+class OrderProcessorImpl: # Implementation of the module
+    def __init__(self, payment: PaymentPort, currency: str = "GBP"): ... # Constructor for the module
+
+    def __call__(self, order: Order) -> Receipt: ...
+
+class StripeAdapter(PaymentPort): # Adapter for the payment port
+    def __init__(self, api_key: str, http: HTTP): ...
 
     def charge(self, amount: float) -> bool: ...
 
-class StripeGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
+class PaypalAdapter(PaymentPort): # Adapter for the payment port
+    def __init__(self, api_key: str, http: HTTP): ...
 
     def charge(self, amount: float) -> bool: ...
-
-class PaypalGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
-
-    def charge(self, amount: float) -> bool: ...
-
-def create_payment_gateway(
-        type: Literal["stripe", "paypal"],
-        env_variable_loader: EnvVariableLoader,
-        http: HTTP
-    ) -> StripeGateway | PaypalGateway: # This is not a factory for the PaymentGateway module as it declares the return type as an implementation of the module, not the module interface.
-    if type == "stripe":
-        api_key = env_variable_loader("STRIPE_API_KEY")
-        return StripeGateway(api_key, http)
-    elif type == "paypal":
-        api_key = env_variable_loader("PAYPAL_API_KEY")
-        return PaypalGateway(api_key, http)
 ```
 
-Good example for a `PaymentGateway` module:
+## Rule 1: a factory returns the interface
+
+Bad example:
 
 ```python
-class PaymentGateway(Protocol):
-
-    def charge(self, amount: float) -> bool: ...
-
-class StripeGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
-
-    def charge(self, amount: float) -> bool: ...
-
-class PaypalGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
-
-    def charge(self, amount: float) -> bool: ...
-
-def create_payment_gateway(
-        type: Literal["stripe", "paypal"],
-        env_variable_loader: EnvVariableLoader,
-        http: HTTP
-    ) -> PaymentGateway: # This is now a factory for the PaymentGateway module since it declares the return type as the interface for the module.
+def create_order_processor(
+        type: Literal["stripe", "paypal"]
+    ) -> OrderProcessorImpl: # This is not a factory for the OrderProcessor module as it declares the return type as the implementation of the module, not the module interface.
     if type == "stripe":
-        api_key = env_variable_loader("STRIPE_API_KEY")
-        return StripeGateway(api_key, http)
+        payment = StripeAdapter(...)
     elif type == "paypal":
-        api_key = env_variable_loader("PAYPAL_API_KEY")
-        return PaypalGateway(api_key, http)
+        payment = PaypalAdapter(...)
+    return OrderProcessorImpl(payment)
+```
+
+Good example:
+
+```python
+def create_order_processor(
+        type: Literal["stripe", "paypal"]
+    ) -> OrderProcessor: # This is now a factory for the OrderProcessor module since it declares the return type as the interface for the module.
+    if type == "stripe":
+        payment = StripeAdapter(...)
+    elif type == "paypal":
+        payment = PaypalAdapter(...)
+    return OrderProcessorImpl(payment)
+```
+
+## Rule 2: a factory holds no behaviour
+
+Bad example:
+
+```python
+def create_order_processor(
+        type: Literal["stripe", "paypal"]
+    ) -> OrderProcessor:
+    if type == "stripe":
+        payment = StripeAdapter(...)
+    elif type == "paypal":
+        payment = PaypalAdapter(...)
+    order_processor = OrderProcessorImpl(payment)
+
+    def with_retry(order: Order) -> Receipt: # Retrying is a behaviour, and no test adapter can reach it here.
+        for _ in range(3):
+            try:
+                return order_processor(order)
+            except PaymentFailed:
+                continue
+        raise PaymentFailed
+
+    return with_retry
+```
+
+Retrying belongs behind a constructor: in `OrderProcessorImpl`, or in an adapter that wraps another adapter. The factory then only chooses and constructs:
+
+```python
+def create_order_processor(
+        type: Literal["stripe", "paypal"]
+    ) -> OrderProcessor:
+    if type == "stripe":
+        payment = StripeAdapter(...)
+    elif type == "paypal":
+        payment = PaypalAdapter(...)
+    return OrderProcessorImpl(RetryingAdapter(payment, attempts=3))
+```
+
+## Rule 3: one constructor, many factories
+
+Each factory is one way of supplying the single constructor:
+
+```python
+def create_stripe_order_processor() -> OrderProcessor:
+    return OrderProcessorImpl(StripeAdapter(...))
+
+def create_paypal_order_processor() -> OrderProcessor:
+    return OrderProcessorImpl(PaypalAdapter(...))
+```
+
+Bad example, a second way of constructing added to the implementation:
+
+```python
+class OrderProcessorImpl:
+    def __init__(self, payment: PaymentPort): ...
+
+    @classmethod
+    def with_stripe(cls) -> "OrderProcessorImpl": # A second constructor: the implementation now knows about an adapter.
+        return cls(StripeAdapter(...))
+```
+
+## Rule 4: a factory gets another module's entity from that module's factory
+
+A `Checkout` module has a port satisfied by an adapter that calls an `OrderProcessor`.
+
+Bad example:
+
+```python
+def create_checkout() -> Checkout:
+    order_processor = OrderProcessorImpl(StripeAdapter(...)) # Calls another module's constructor, so how an OrderProcessor is built is now known in two places.
+    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+```
+
+Good example:
+
+```python
+def create_checkout() -> Checkout:
+    order_processor = create_order_processor("stripe") # Another module's factory
+    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+```
+
+## Rule 5: a factory is where resources are first reached
+
+The factory reads the environment and passes what it reads to the constructors:
+
+```python
+def create_order_processor(
+        type: Literal["stripe", "paypal"] # A parameter that selects between choices
+    ) -> OrderProcessor:
+    http = RealHTTP() # The factory constructs what the adapters need
+    if type == "stripe":
+        payment = StripeAdapter(api_key=os.environ["STRIPE_API_KEY"], http=http) # The factory reaches the resource and passes the value on
+    elif type == "paypal":
+        payment = PaypalAdapter(api_key=os.environ["PAYPAL_API_KEY"], http=http)
+    return OrderProcessorImpl(
+        payment,
+        currency=os.environ["CURRENCY"] # Configuration for the module, read here and not in the constructor
+    )
+```
+
+Bad example:
+
+```python
+def create_order_processor(
+        payment: PaymentPort # Takes a port, so this is a second constructor and not a factory
+    ) -> OrderProcessor:
+    return OrderProcessorImpl(payment, currency=os.environ["CURRENCY"])
 ```

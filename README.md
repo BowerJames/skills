@@ -8,18 +8,18 @@ My personal AI coding agent skills, following the [Agent Skills](https://agentsk
 
 A prerequisite chain — install together:
 
-- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — shared vocabulary for designing deep modules: interface, behaviour, seam, adapter, factory, resource.
-- **[dependency-injection](skills/engineering/dependency-injection/SKILL.md)** — wiring modules together: code against interfaces, declare seams in factories. *Requires codebase-design.*
-- **[factory-pattern](skills/engineering/factory-pattern/SKILL.md)** — the code that creates an entity satisfying a module's interface. *Requires the two above.*
+- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — shared vocabulary for designing modules: interface, constructor, port, adapter, factory, behaviour, resource.
+- **[dependency-injection](skills/engineering/dependency-injection/SKILL.md)** — what a constructor receives: a module depends on its own ports, and ports and configuration go in the constructor. *Requires codebase-design.*
+- **[factory-pattern](skills/engineering/factory-pattern/SKILL.md)** — the code that calls a module's constructor and returns the entity. *Requires the two above.*
 
 Testing:
 
-- **[testing](skills/engineering/testing/SKILL.md)** — testing modules through their factories and interfaces: one behaviour per test, test adapters at the seams. *Requires codebase-design.*
+- **[testing](skills/engineering/testing/SKILL.md)** — testing entities through their constructors and interfaces: one behaviour per test, a test adapter for every port. *Requires codebase-design.*
 - **[test-driven-development](skills/engineering/test-driven-development/SKILL.md)** — driving development through tests: the red → green loop, one behaviour per cycle. *Requires codebase-design and testing.*
 
 Structure:
 
-- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: one package and entry point per module, shared data carriers moved at second use, imports pointing one way. *Requires codebase-design.*
+- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: modules and data carriers in the core, adapters, factories and entrypoints in the infrastructure, imports pointing inward, tests mirroring the source tree. *Requires codebase-design.*
 
 ### Utils
 

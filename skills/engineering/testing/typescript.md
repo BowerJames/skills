@@ -7,21 +7,21 @@ The sections in [SKILL.md](SKILL.md) are language-agnostic. This file is its Typ
 We will look at a good test for an `OrderProcessor` module. Consider the setup:
 
 ```ts
-interface PaymentGateway {
+interface PaymentPort { // Port defined for the module
   charge(amount: number): boolean;
 }
 
 type OrderProcessor = (order: Order) => Receipt;
 
-function createOrderProcessor(
-  gateway: PaymentGateway, // Seam is passed in the factory for the OrderProcessor module
+function newOrderProcessor(
+  payment: PaymentPort, // The port is passed to the constructor of the OrderProcessor module
 ): OrderProcessor {
   return function processOrder(order) {
     let total = 0;
     for (const item of order.items) {
       total += item.cost;
     }
-    const paymentSuccessful = gateway.charge(total);
+    const paymentSuccessful = payment.charge(total);
     if (!paymentSuccessful) {
       throw new Error(/* ... */);
     }
@@ -33,17 +33,17 @@ function createOrderProcessor(
 The test adapter — a working fake, no mock library:
 
 ```ts
-interface FakeGateway extends PaymentGateway { // a test adapter: decides inward, records outward
+interface FakePaymentAdapter extends PaymentPort { // a test adapter: decides what comes in, records what goes out
   charges: number[];
 }
 
-function createFakeGateway(): FakeGateway {
+function newFakePaymentAdapter(): FakePaymentAdapter {
   const charges: number[] = [];
   return {
     charges,
-    charge(amount) {        // satisfies PaymentGateway by shape
-      charges.push(amount); // records what crosses the seam outward
-      return true;          // decides what crosses inward
+    charge(amount) {        // satisfies the port by shape
+      charges.push(amount); // records what goes out through the port
+      return true;          // decides what comes in
     },
   };
 }
@@ -61,35 +61,97 @@ function orderWith(prices: number[]): Order { // a harness helper: construction 
   };
 }
 
-function setup(gateway: PaymentGateway): OrderProcessor { // Use a helper to wrap the module factory so future changes to the factory design can be localised in the test file
-  return createOrderProcessor(gateway);
+function setup(payment: PaymentPort): OrderProcessor { // Use a helper to wrap the module constructor so future changes to the constructor design can be localised in the test file
+  return newOrderProcessor(payment);
 }
 
 test.each([
   { prices: [100], expectedCharge: 100 },      // worked examples, chosen by hand
   { prices: [100, 40], expectedCharge: 140 },
-])("charges the gateway the order total ($prices)", ({ prices, expectedCharge }) => {
-  const gateway = createFakeGateway();               // the test adapter at the seam
-  const orderProcessor = setup(gateway);
+])("charges the payment port the order total ($prices)", ({ prices, expectedCharge }) => {
+  const payment = newFakePaymentAdapter();           // the test adapter for the port
+  const orderProcessor = setup(payment);             // constructed through the constructor, never a factory
   orderProcessor(orderWith(prices));                 // driven through the interface
-  expect(gateway.charges).toEqual([expectedCharge]); // the outcome crosses the seam — seen by the adapter that receives it
+  expect(payment.charges).toEqual([expectedCharge]); // the outcome goes out through the port — seen by the adapter that receives it
 });
 ```
 
-- The name is the capability, and the assertions verify exactly it — a name promising one behaviour while the assertions check another is a test carrying two behaviours.
+- The name is the behaviour, and the assertions verify exactly it — a name promising one behaviour while the assertions check another is a test carrying two behaviours.
 - Each `test.each` case is one condition of the one behaviour: a second condition is a second case, not a second assertion.
 - The expected charges are worked examples (`100 + 40 = 140`, by hand) — the test never computes them with source code.
+
+## Testing the infrastructure
+
+An adapter is tested through the port it satisfies and its own constructor. A Stripe adapter that takes its HTTP dependency in the constructor can be unit tested with a test adapter:
+
+```ts
+type Http = (request: HttpRequest) => HttpResponse;
+
+function newStripeAdapter(apiKey: string, http: Http): PaymentPort { // everything required to measure its behaviours
+  return {
+    charge(amount) { /* ... */ },
+  };
+}
+```
+
+```ts
+function newFakeHttp() { // a test adapter for what the adapter's constructor takes
+  const requests: HttpRequest[] = [];
+  const http: Http = (request) => {
+    requests.push(request);
+    return { status: 200 };
+  };
+  return { http, requests };
+}
+
+test("charge sends the amount in pence", () => {
+  const { http, requests } = newFakeHttp();
+  const stripe = newStripeAdapter("test-key", http);
+  stripe.charge(12.5);                           // driven through the port it satisfies
+  expect(requests[0].body.amount).toBe(1250);
+});
+```
+
+Integration tests and end-to-end tests are kept apart from the unit tests by directory, so the default run needs no environment:
+
+```ts
+// tests/integration/infrastructure/adapters/order-processor/postgres/postgres.test.ts
+test("saves and loads an order", () => { // runs against the real resource
+  const orders = newPostgresAdapter(process.env.POSTGRES_URL!);
+  orders.save(orderWith([100]));
+  expect(orders.load("order_id").items[0].cost).toBe(100);
+});
+```
+
+```ts
+// tests/e2e/cli.test.ts
+test("cli processes an order", () => { // runs an entrypoint with the production factories
+  const output = main(["process", "--price", "100"]);
+  expect(output).toContain("total=100");
+});
+```
+
+```json
+// package.json
+{
+  "scripts": {
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e"
+  }
+}
+```
 
 ## Anti-patterns
 
 **Tautological** — the oracle is the source code:
 
 ```ts
-import { calculateTotal } from "./order-processor"; // a source-code helper
+import { calculateTotal } from "../../../../src/core/order-processor/implementation"; // a source-code helper
 
 test("totals the receipt", () => { // tautological
-  const gateway = createFakeGateway();
-  const orderProcessor = setup(gateway);
+  const payment = newFakePaymentAdapter();
+  const orderProcessor = setup(payment);
   const order = orderWith([100, 40]);
   expect(orderProcessor(order).total).toBe(calculateTotal(order));
   // whatever bug calculateTotal carries, the expectation inherits —
@@ -103,17 +165,17 @@ The fix is an oracle independent of the source code: computing the expectation i
 
 ```ts
 import { expect, test, vi } from "vitest";
-import { sumCosts } from "./totals"; // a helper the implementation calls internally
+import { sumCosts } from "../../../../src/core/order-processor/totals"; // a helper the implementation calls internally
 
-vi.mock("./totals");                 // reaches inside the implementation
+vi.mock("../../../../src/core/order-processor/totals");                 // reaches inside the implementation
 
 test("sums the prices", () => {
-  const gateway = createFakeGateway();
-  const orderProcessor = setup(gateway);
+  const payment = newFakePaymentAdapter();
+  const orderProcessor = setup(payment);
   vi.mocked(sumCosts).mockReturnValue(100);
   orderProcessor(orderWith([100, 40]));
   expect(sumCosts).toHaveBeenCalledOnce();
 });
 ```
 
-The tell: swap `sumCosts` for a hand-rolled loop — behaviour unchanged, every interface-level test green — and this test goes red. It was never on the interface's side of the seam. The fix: observation belongs at the seams the interface exposes — the fake gateway's `charges` — not inside the implementation's helpers. (Module mocking and exporting internals just so a test can reach them are this pattern's two common TypeScript shapes.)
+The tell: swap `sumCosts` for a hand-rolled loop — behaviour unchanged, every interface-level test green — and this test goes red. It was never on the outside of the interface. The fix: observation belongs at the interface and the ports — the fake payment adapter's `charges` — not inside the implementation's helpers. (Module mocking and exporting internals just so a test can reach them are this pattern's two common TypeScript shapes.)

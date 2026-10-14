@@ -1,80 +1,58 @@
 ---
 name: codebase-design
-description: Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.
+description: Shared vocabulary for designing simple, flexible, maintainable codebases. Use when the user wants to design or implement changes in the codebase.
 ---
 
 # Codebase Design
 
-Design **deep modules**: a lot of behaviour represented behind a small interface, testable through its interface and dependencies. Use this language and these principles wherever code is being designed or restructured.
+Design modules that can represent a wide range of capability behind a small interface, fully testable through its interface and ports. Use this language and these principles wherever code is being designed or restructured.
 
 The aim is to provide:
 
 - leverage for callers
 - locality for maintainers
-- flexibility for developers
+- flexibility for designers
 - testability for everyone.
 
 ## Glossary
 
 Use these terms exactly — don't substitute "component," "service," "API," or "boundary." Consistent language is the whole point.
 
+**Entity** — A code construct, could be a class, function, type or any other structure that exists within the language syntax.
+
 **Interface** — everything a caller must know to use an entity correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics.
 
 _Avoid_: API, signature (too narrow — they refer only to the type-level surface).
 
-**Behaviour** — A capability of an entity that can be measured or observed through its interface and adapters.
+**Implementation** — The body of code that sits behind an interface.
 
-**Implementation** — The body of code that sits behind an interface. This is what provides the entity its behaviours.
+**Constructor** — A singular thing anything must run to create an entity. Must contain everything required to measure the behaviours of the entity.
 
-**Module** — An interface coupled with the full range of behaviours that can be represented by an entity satisfying the interface along with the implementations that provide those behaviours.
+**Port** — An interface defined by an entity that must be provided to its constructor.
+
+**Module** — Something with an interface, an implementation and that defines all the interfaces in its constructor (ports)
 
 _Avoid_: unit, component, service.
 
-**Depth** — leverage at the interface: the range of capabilities a caller (or test) could exercise per unit of interface they have to learn. A module is **deep** when a large range of capabilities sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.
+**Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from ports which are interfaces not values.
 
-**Seam** _(Michael Feathers)_ — a place where you can alter the capabilities of an entity satisfying a module's interface without editing the implementation. Prefer to place seams in the factories of a module.
+**Adapter** — An entity defined to satisfy a port of a module.
 
-_Avoid_: boundary (overloaded with DDD's bounded context).
+**Behaviour** — Something measurable and verifiable by a test through an entity's interface and constructor.
 
-**Adapter** — a concrete thing that satisfies an interface at a seam. The interface the adapter satisfies can be a subset of the full interface of the thing itself.
+**Factory** — Anything that calls the constructor of an entity and returns the entity.
 
-**Factory** — The code that creates an entity satisfying a module's interface.
+**Capability** — what an entity can do for a caller through its interface, counting what the entities passed to its constructor provide. One behaviour gives one capability for each adapter that can satisfy a port.
 
-_Avoid_: constructor
+**Resource** — something external from the software's environment or a test's control: the filesystem, the network, the clock, randomness, environment variables, a database. A test cannot decide the outcome of an interaction with a resource, so behaviour that crosses one must be tested by substituting it.
 
-**Resource** — anything an entity uses that exists outside the software's environment or a test's control: the filesystem, the network, the clock, randomness, environment variables, a database. A test cannot decide the outcome of an interaction with a resource, so behaviour that crosses one must be tested by substituting it — a resource is reached through a **Seam**, satisfied by the real **Adapter** in production and a test adapter (fake or mock) in tests.
-
-_Avoid_: dependency (every import is one; most need no mocking), external service (time isn't a service), side effect (describes the crossing, not the thing), boundary (rejected above).
-
-**Leverage** — what callers want from a module: more capability per unit of interface they learn. One implementation pays back across N call sites and M tests.
+**Leverage** — what callers want from a module: a higher range of capability per unit of interface they learn.
 
 **Locality** — what maintainers want from a module: change, bugs, knowledge, and verification concentrate in one place rather than spreading across callers. Fix once, fixed everywhere.
 
-**Flexibility** — what developers want from a module: the ease with which one can extend or broaden the range of capabilities sitting behind an interface.
+**Flexibility** — what designers want from a module: the ease with which one can extend or broaden the range of capabilities sitting behind an interface.
 
-## Deep vs shallow
-
-**Deep module** = small interface + lots of implementation:
-
-```
-┌─────────────────────┐
-│   Small Interface   │  ← Few methods, simple params
-├─────────────────────┤
-│                     │
-│  Deep Implementation│  ← Complex logic hidden
-│                     │
-└─────────────────────┘
-```
-
-**Shallow module** = large interface + little implementation (avoid):
-
-```
-┌─────────────────────────────────┐
-│       Large Interface           │  ← Many methods, complex params
-├─────────────────────────────────┤
-│  Thin Implementation            │  ← Just passes through
-└─────────────────────────────────┘
-```
+## Design Considerations
 
 When designing an interface, ask whether you can maintain the range of capabilities but:
 
@@ -85,38 +63,33 @@ When designing an interface, ask whether you can maintain the range of capabilit
 
 ## Principles
 
-- **Depth is measured against the interface, not the implementation.** A deep module can provide a large range of capabilities by being internally composed of adapters provided through seams.
-- **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
-- **A module's factory is not part of its interface.** Adding seams to the factories of a module does not increase the complexity of the module's interface and therefore does not reduce the leverage.
-- **A module's interface and factories are the test surface.** Callers and tests drive through the same interface. Behaviours can be measured through the interface or adapters that satisfy the seams.
-- **Behaviour is not the same as capability.** A module with a seam satisfied by many adapters exhibits a wide range of capabilities (one for each adapter) through a single behaviour.
+- **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its ports.
+- **An entity's constructor is not part of its interface.** Adding complexity to the constructor of a module does not increase the complexity of the entity's interface and therefore does not reduce the leverage.
+- **An entity's interface and constructor are the test surface.** Callers and tests drive through the same interface. Behaviours can be measured through the interface and constructor.
+- **Behaviour is not the same as capability.** An entity's capability is measured including the capability of the entities included in its constructor.
 
 ## Designing for testability
 
-Good modules make testing natural:
+Good entities make testing natural:
 
-1. **Accept dependencies, don't create them.**
+1. **Constructors accept dependencies, they don't create them.**
 2. **Return results, don't produce side effects.**
 3. **Small surface area.** Fewer methods = fewer tests needed. Fewer params = simpler test setup.
 
 ## Relationships
 
 - A **Module** has exactly one **Interface** (the surface it presents to callers and tests).
-- **Depth** is a property of a **Module**, measured against its **Interface**.
-- A **Module** has one or more **Factories**; a **Factory** is not part of the **Interface**.
-- A **Seam** belongs in a **Factory** where possible, and in the **Interface** otherwise.
-- An **Adapter** sits at a **Seam** and satisfies an **Interface**.
-- **Depth** produces **Leverage** for callers.
-- **Seams** satisfied by **Adapters** produce **Flexibility** for developers and **Locality** for maintainers: a new adapter adds a capability, and each side of the seam changes and fails in one place.
+- **Capability** is a property of an **Entity**, measured against its **Interface**.
+- An entity can have many **Factories** but only one **Constructor**
+- An **Adapter**'s interface must satisfy a port of a module
 
 ## Rejected framings
 
-- **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.
-- **"Boundary"**: overloaded with DDD's bounded context. Say **seam** or **interface**.
+- **Capability as a ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We measure capability against the interface instead: the range of capability per unit of interface a caller has to learn.
 
 ## Language idioms
 
 The vocabulary above is language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — Protocols and Callables as interfaces, a worked `PaymentGateway` module, two formulations of `OrderProcessor`
-- [typescript.md](typescript.md) — no classes: interfaces and function types, a worked `PaymentGateway` module, two formulations of `OrderProcessor`
+- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` module with its port, adapters and factory
+- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` module with its port, adapters and factory
