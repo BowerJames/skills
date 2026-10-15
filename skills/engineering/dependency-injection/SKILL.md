@@ -21,12 +21,14 @@ A module's constructor takes at most one parameter that carries behaviour: the m
 
 - **The port holds everything the module needs.** A behaviour that needs something new adds a method to the port, never a second port.
 - **A port is an interface, never an implementation.** A constructor never names an adapter's type.
-- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
+- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. The exception is a domain interface, whose meaning is the same everywhere: any module's port may use it. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
 - **A port holds only what the module calls.** It is shaped by the module's needs, not copied from the adapter that will satisfy it.
 
 Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier, never an object from a library: a module is self-contained, so what a library provides reaches it through its port.
 
-An adapter's constructor is not limited to the module's port: it can take ports of its own, satisfied by other entities, or anything else it needs. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An adapter's constructor takes interfaces of the four kinds (a module's port or interface, a domain interface, an entrypoint's port), configuration, and, at the edge where it reaches a resource, the library's own object, or a view of it where the library offers no test hook. It defines no port of its own: anything with behaviour behind it that the adapter needs is a module or a domain interface, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
+
+When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
 
 This improves **flexibility for designers** since a new adapter adds a capability without touching the module.
 
@@ -57,7 +59,7 @@ This improves **testability for everyone** since constructing any entity is safe
 A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. There are two kinds:
 
 - **A module factory** builds a module: it gets an adapter for the module's port and calls the module's constructor.
-- **An adapter factory** builds an adapter: it builds the parts the adapter's constructor takes and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
+- **An adapter factory** builds an adapter: it builds the library objects the adapter's constructor takes, gets every other entity from that entity's factory, and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
 
 ### 4. A factory returns the interface
 
@@ -77,7 +79,7 @@ This improves **testability for everyone** since every behaviour sits behind a c
 
 ### 6. A factory reaches no resource
 
-A factory never reads an environment variable, reads a settings file or opens a connection. A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the startup code, a settings loader, a test — is a design decision.
+A factory never reads an environment variable, reads a settings file or opens a connection, and so it is synchronous: a factory that has to wait on something is reaching for a resource. A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the startup code, a settings loader, a test — is a design decision.
 
 This improves **locality for maintainers** since how the program is wired and how it reads its environment change independently.
 
@@ -91,7 +93,7 @@ This improves **flexibility for designers** since a new combination of adapters 
 
 ### 8. A factory calls one entity's constructor, and gets everything else from factories
 
-A factory calls the constructor of the entity it builds and, for an adapter, the constructors of the parts defined in the adapter's package. Every other entity it needs comes from that entity's factory or as a parameter.
+A factory calls the constructor of the entity it builds and, for an adapter, builds the library objects the adapter takes. Every other entity it needs comes from that entity's factory or as a parameter.
 
 - A module factory never calls an adapter's constructor. It calls the adapter's factory.
 - A factory never calls another module's constructor. It calls one of that module's factories, or takes the entity as a parameter.

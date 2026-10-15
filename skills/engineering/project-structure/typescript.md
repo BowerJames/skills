@@ -9,9 +9,10 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Type
 | **Package** | a directory with an `index.ts` |
 | **Export file** | the package's `index.ts`, re-exporting names |
 | **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
-| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts` |
+| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts`, `core/domain/agent-tool.ts` |
+| **Domain interface** | an `interface` in its own file in `core/domain` — `AgentTool` in `core/domain/agent-tool.ts` |
 | **Module factory package** | `infrastructure/factories/modules/<module-name>`, with the factories in `factory.ts` |
-| **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, or `<entrypoint-name>/<adapter-name>` for a driving adapter, with the factories in `factory.ts` |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, or `<entrypoint-name>/<adapter-name>` for a driving adapter, or `<interface-name>/<adapter-name>` for an adapter of a domain interface, with the factories in `factory.ts` |
 | **Entrypoint** | the framework or runtime that calls the program, never written in it: Fastify, Commander, or Node running a file, named `main` |
 | **Driving adapter** | a function returned by a constructor in `infrastructure/adapters/<entrypoint-name>/<adapter-name>` — `newCli` in `infrastructure/adapters/main/cli/adapter.ts` |
 | **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.ts` |
@@ -42,11 +43,11 @@ src/
         stripe/
           index.ts             # the export file
           adapter.ts           # newStripeAdapter
-          http.ts              # Http, newRealHttp: the adapter's own port and what satisfies it
+          fetch.ts             # SyncFetch: its view of the sync-fetch library's function
         paypal/
           index.ts             # the export file
           adapter.ts           # newPaypalAdapter
-          http.ts              # Http, newRealHttp
+          fetch.ts             # SyncFetch
       main/                    # the driving adapters of Node running a file
         cli/
           index.ts             # the export file
@@ -154,9 +155,9 @@ An adapter imports the port from the module's export file:
 import type { OrderProcessorPort } from "../../../../core/order-processor";      // good: the export file
 import type { OrderProcessorPort } from "../../../../core/order-processor/port"; // bad: reaches behind the export file
 import { newPaypalAdapter } from "../paypal";                                    // bad: an adapter importing another adapter
-import type { Http } from "./http";                                              // good: the adapter's own port, defined in its own package
+import type { SyncFetch } from "./fetch";                                        // good: its view of the library, declared in its own package
 
-export function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the stripe adapter
+export function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort { // Constructor: takes the library's function
   return { // Adapter for the module's port
     charge(amount, currency) { /* ... */ },
   };
@@ -172,24 +173,24 @@ import { newStripeAdapter } from "../../infrastructure/adapters/order-processor/
 
 ## Example 2: the factory packages, a driving adapter and its startup code
 
-The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
+The adapter's export file exports its constructor and its view, which is what its adapter factory and its tests need:
 
 ```ts
 // src/infrastructure/adapters/order-processor/stripe/index.ts
 export { newStripeAdapter } from "./adapter";
-export { newRealHttp } from "./http";
-export type { Http } from "./http";
+export type { SyncFetch } from "./fetch";
 ```
 
-The adapter factory builds the adapter's parts and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+The adapter factory passes the library objects the adapter takes and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
 
 ```ts
 // src/infrastructure/factories/adapters/order-processor/stripe/factory.ts
+import syncFetch from "sync-fetch";
 import type { OrderProcessorPort } from "../../../../../core/order-processor";
-import { newRealHttp, newStripeAdapter } from "../../../../adapters/order-processor/stripe";
+import { newStripeAdapter } from "../../../../adapters/order-processor/stripe";
 
 export function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory: returns the port the adapter satisfies
-  return newStripeAdapter(apiKey, newRealHttp());
+  return newStripeAdapter(apiKey, syncFetch); // The library's function satisfies the view by shape
 }
 ```
 
@@ -285,7 +286,7 @@ app.register(createOrdersRoutes(createOrderProcessor("stripe", process.env.STRIP
 await app.listen({ port: 3000 });
 ```
 
-When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
 
 ```ts
 // src/infrastructure/adapters/fastify/call-routes/adapter.ts
@@ -293,7 +294,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { WebSocket } from "ws";
 import type { CallDetails, PhoneCall } from "../../../../core/phone-call";
 
-export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // The driving adapter's own port: opening the entity per request
+export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // Opens the entity per request: a function returning the module's interface
 
 export function newCallRoutes(path: string, openCall: OpenPhoneCall): FastifyPluginAsync { // Its constructor: returns the plugin Fastify calls
   return async (app) => {
@@ -400,8 +401,8 @@ tests/
       adapters/
         order-processor/
           stripe/
-            stripe.test.ts         # constructs with newStripeAdapter and a fake http
-            adapters.ts            # newFakeHttp
+            stripe.test.ts         # constructs with newStripeAdapter and a fake of its view
+            adapters.ts            # newFakeFetch: the test adapter for the view
         checkout/
           order-processor/
             order-processor.test.ts  # constructs with newOrderProcessorAdapter and a fake order processor
@@ -474,6 +475,139 @@ Legacy code that needs an `OrderProcessor` calls the factory and drives the inte
 import { createOrderProcessor } from "./infrastructure/factories/modules/order-processor"; // good: a module factory
 import { newOrderProcessor } from "./core/order-processor";                                // bad: the constructor
 ```
+
+## Example 6: a domain interface and its adapters
+
+A `ToolRunner` module runs the tools a model calls. A tool means the same thing to every entity that uses it, so `AgentTool` is a domain interface, and every tool is an adapter of it:
+
+```
+src/
+  core/
+    domain/
+      agent-tool.ts              # AgentTool: a domain interface
+    tool-runner/
+      port.ts                    # ToolRunnerPort: tools(), using AgentTool
+  infrastructure/
+    adapters/
+      agent-tool/                # the adapters of the AgentTool domain interface
+        order-processor/
+          adapter.ts             # newPlaceOrderTool: places an order through the OrderProcessor module
+          params.ts              # placeOrderParams: the zod schema of its arguments
+        structured/
+          adapter.ts             # newStructuredTool: validates arguments against a zod schema
+      tool-runner/
+        toolset/
+          adapter.ts             # newToolset: offers the runner the tools it is given
+    factories/
+      adapters/
+        agent-tool/
+          order-processor/       # createPlaceOrderTool
+          structured/            # createStructuredTool
+        tool-runner/
+          toolset/               # createToolset
+      modules/
+        tool-runner/             # createToolRunner
+```
+
+The domain interface has a shape and no behaviour. The module's one port uses it:
+
+```ts
+// src/core/domain/agent-tool.ts
+export interface AgentTool { // A domain interface: the same meaning to every entity that uses it
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Readonly<Record<string, unknown>>; // the JSON Schema of execute's arguments
+  execute(args: Record<string, unknown>): Promise<string>;
+}
+```
+
+```ts
+// src/core/tool-runner/port.ts
+import type { AgentTool } from "../domain/agent-tool";
+
+export interface ToolRunnerPort { // The module's one port; it uses the domain interface
+  tools(): readonly AgentTool[];
+}
+```
+
+Each tool is an adapter of the domain interface, under `infrastructure/adapters/agent-tool`. One connects the order processor module, so it is named for that module:
+
+```ts
+// src/infrastructure/adapters/agent-tool/order-processor/adapter.ts
+import type { AgentTool } from "../../../../core/domain/agent-tool";
+import type { OrderProcessor } from "../../../../core/order-processor";
+
+export function newPlaceOrderTool(orderProcessor: OrderProcessor): AgentTool { // Connects the order processor module
+  return {
+    name: "place_order",
+    description: "Place the caller's order.",
+    parameters: { type: "object", properties: { id: { type: "string" }, costs: { type: "array" } } },
+    async execute(args) {
+      const costs = args.costs as number[];
+      const receipt = orderProcessor({
+        id: args.id as string,
+        items: costs.map((cost, i) => ({ name: `item_${i}`, cost })),
+      });
+      return `Charged ${receipt.total} ${receipt.currency}.`;
+    },
+  };
+}
+```
+
+A generic adapter of the same interface is reused by wrapping, never by importing. `newStructuredTool` validates the arguments against a zod schema, then passes them to the tool it wraps:
+
+```ts
+// src/infrastructure/adapters/agent-tool/structured/adapter.ts
+import { z } from "zod";
+import type { AgentTool } from "../../../../core/domain/agent-tool";
+
+export function newStructuredTool(
+  params: z.ZodObject,
+  inner: AgentTool, // The tool it wraps, typed as the interface
+): AgentTool { // A generic adapter of the domain interface
+  return {
+    name: inner.name,
+    description: inner.description,
+    parameters: z.toJSONSchema(params), // The schema comes from the zod schema, not the inner tool
+    async execute(args) {
+      const parsed = params.safeParse(args);
+      if (!parsed.success) {
+        return JSON.stringify(parsed.error.issues); // handled: the model reads which arguments to correct
+      }
+      return inner.execute(parsed.data);
+    },
+  };
+}
+```
+
+The factories combine them. A tool's factory gets the generic adapter from its factory, and the module factory gets the toolset from its own:
+
+```ts
+// src/infrastructure/factories/adapters/agent-tool/order-processor/factory.ts
+import type { AgentTool } from "../../../../../core/domain/agent-tool";
+import type { OrderProcessor } from "../../../../../core/order-processor";
+import { newPlaceOrderTool, placeOrderParams } from "../../../../adapters/agent-tool/order-processor";
+import { createStructuredTool } from "../structured";
+
+export function createPlaceOrderTool(orderProcessor: OrderProcessor): AgentTool { // Returns the domain interface it satisfies
+  return createStructuredTool(placeOrderParams, newPlaceOrderTool(orderProcessor));
+}
+```
+
+```ts
+// src/infrastructure/factories/modules/tool-runner/factory.ts
+import type { OrderProcessor } from "../../../../core/order-processor";
+import { newToolRunner } from "../../../../core/tool-runner";
+import type { ToolRunner } from "../../../../core/tool-runner";
+import { createPlaceOrderTool } from "../../adapters/agent-tool/order-processor";
+import { createToolset } from "../../adapters/tool-runner/toolset";
+
+export function createToolRunner(orderProcessor: OrderProcessor): ToolRunner {
+  return newToolRunner(createToolset([createPlaceOrderTool(orderProcessor)]));
+}
+```
+
+The tests for `ToolRunner` pass a fake port returning fake `AgentTool`s; each tool adapter is tested on its own, through the domain interface, under `tests/unit/infrastructure/adapters/agent-tool/<adapter-name>`.
 
 ## Checking the rules
 

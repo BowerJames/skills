@@ -11,9 +11,11 @@ The style throughout: **no classes**. Entities are functions and object literals
 | **Interface** | for object shapes, an `interface`; for functions, a type — `(order: Order) => Receipt` |
 | **Port** | for object shapes, an `interface`; for functions, a type — `() => Date` |
 | **Adapter** | an object literal or function satisfying the port's shape |
+| **Domain interface** | an `interface` in the domain package — `AgentTool` |
 | **Driven adapter** | an adapter satisfying a module's port — `newStripeAdapter`'s object for `OrderProcessorPort` |
 | **Driving adapter** | an adapter satisfying the shape its entrypoint calls — a Fastify plugin, a command `(argv: string[]) => void` |
 | **Entrypoint** | the framework or runtime that calls the program, never written in it — Fastify, Commander, or Node running a file |
+| **View** | a `type` in an edge adapter's package, describing the part of a library's object it uses — `SyncFetch` for the `sync-fetch` library, which has no test hook |
 | **Constructor** | the function that takes the port and returns the entity |
 | **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
 | **Error** | a subclass of `Error` |
@@ -60,24 +62,24 @@ function newOrderProcessor(
   };
 }
 
-function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the stripe adapter
+function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort { // Constructor for the stripe adapter
   return { // Adapter for the port
     charge(amount, currency) { /* ... */ },
   };
 }
 
-function newPaypalAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the paypal adapter
+function newPaypalAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort { // Constructor for the paypal adapter
   return { // Adapter for the port
     charge(amount, currency) { /* ... */ },
   };
 }
 
 function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the stripe adapter
-  return newStripeAdapter(apiKey, newRealHttp());
+  return newStripeAdapter(apiKey, syncFetch);
 }
 
 function createPaypalAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the paypal adapter
-  return newPaypalAdapter(apiKey, newRealHttp());
+  return newPaypalAdapter(apiKey, syncFetch);
 }
 
 function createOrderProcessor(
@@ -101,10 +103,10 @@ Matching is structural: the object literals returned by `newStripeAdapter` and `
 The adapter handles what it can decide and lets everything else propagate:
 
 ```ts
-function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort {
+function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort {
   return {
     charge(amount, currency) {
-      const response = http({ /* ... */ }); // a network error propagates unchanged
+      const response = fetch(/* ... */); // a network error propagates unchanged
       if (response.status === 402) {
         return false; // handled: a decline is an answer the port can give
       }
@@ -119,7 +121,7 @@ Wrapping hides the error's origin:
 ```ts
     charge(amount, currency) {
       try {
-        const response = http({ /* ... */ });
+        const response = fetch(/* ... */);
         /* ... */
       } catch (error) {
         throw new PaymentFailed({ cause: error }); // bad: wraps an error the adapter did not determine

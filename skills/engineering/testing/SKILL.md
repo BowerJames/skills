@@ -15,7 +15,7 @@ description: Discipline for testing entities through their constructors and inte
 
 _Avoid_: module under test (too narrow — an adapter is tested the same way), unit under test, system under test, SUT, code under test.
 
-**Test adapter** — an adapter that satisfies a **Port** of the **Entity under test** in place of a production adapter. Like every adapter, it satisfies the whole port.
+**Test adapter** — an adapter that satisfies an interface the **Entity under test**'s constructor takes, in place of a production adapter: a port, a module's interface, a domain interface, or a view. Like every adapter, it satisfies the whole interface.
 
 _Avoid_: test double (an outside taxonomy; **Adapter** already names the role), stub and spy, mock as a verb for all substitution.
 
@@ -54,7 +54,7 @@ A test never works against internals: pick the **Entity under test**, call its c
 
 ## Testing the infrastructure
 
-- **Adapters.** An adapter is an entity under test like any other: its interface is the port it satisfies, and it is constructed with test adapters for whatever its own constructor takes. Where that measures the behaviour, the test is a **unit test**. Where the behaviour can only be measured against the real resource — a query that only the database can judge — it is an **integration test**.
+- **Adapters.** An adapter is an entity under test like any other: its interface is the interface it satisfies, and it is constructed with test adapters for the interfaces its constructor takes. For a library's object it takes, the test passes the library's own test hook, such as `httpx.MockTransport`, or a fake of the adapter's view where the library has none. Where that measures the behaviour, the test is a **unit test**. Where the behaviour can only be measured against the real resource — a query that only the database can judge — it is an **integration test**.
 - **Driving adapters.** A driving adapter's translation between its entrypoint's input and data carriers is behaviour. Its constructor takes the interfaces it drives, so it is unit tested with a test adapter for each. Where the entrypoint provides a test client that reaches no resource, such as a web framework's, the test may drive the adapter through it: that is how the entrypoint calls it.
 - **Entrypoints.** The entrypoint is a framework or runtime, not the project's code, so it has no tests of its own.
 - **Factories and startup code.** They hold no behaviour, so they have no unit tests. Only an end-to-end test exercises them.

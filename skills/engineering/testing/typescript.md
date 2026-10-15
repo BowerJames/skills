@@ -88,12 +88,13 @@ test("refuses an order the port declines", () => {
 
 ## Testing the infrastructure
 
-An adapter is tested through the port it satisfies and its own constructor. A Stripe adapter that takes its HTTP dependency in the constructor can be unit tested with a test adapter:
+An adapter is tested through the interface it satisfies and its own constructor. At the edge it takes the library's own object. The Stripe adapter calls the `sync-fetch` library, which offers no test hook, so the adapter declares a view of the one function it uses; the library's function satisfies it by shape, and the test passes a fake:
 
 ```ts
-type Http = (request: HttpRequest) => HttpResponse;
+// the view, declared in the adapter's package: sync-fetch's default export satisfies it by shape
+type SyncFetch = (url: string, init: { method: string; body: string }) => { status: number };
 
-function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // everything required to measure its behaviours
+function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort { // everything required to measure its behaviours
   return {
     charge(amount, currency) { /* ... */ },
   };
@@ -101,32 +102,34 @@ function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // e
 ```
 
 ```ts
-function newFakeHttp(status = 200) { // a test adapter for the adapter's own port
-  const requests: HttpRequest[] = [];
-  const http: Http = (request) => {
-    requests.push(request);
-    return { status };
+function newFakeFetch(status = 200) { // a test adapter for the view
+  const bodies: Record<string, unknown>[] = [];
+  const fetch: SyncFetch = (url, init) => {
+    bodies.push(JSON.parse(init.body)); // records what goes out
+    return { status };                  // decides what comes in
   };
-  return { http, requests };
+  return { fetch, bodies };
 }
 
 test("charge sends the currency in lower case", () => {
-  const { http, requests } = newFakeHttp();
-  const stripe = newStripeAdapter("test-key", http);
+  const { fetch, bodies } = newFakeFetch();
+  const stripe = newStripeAdapter("test-key", fetch);
   stripe.charge(1250, "GBP");                    // driven through the port it satisfies
-  expect(requests[0].body.currency).toBe("gbp");
+  expect(bodies[0].currency).toBe("gbp");
 });
 
 test("charge answers false when the card is declined", () => {
-  const stripe = newStripeAdapter("test-key", newFakeHttp(402).http);
+  const stripe = newStripeAdapter("test-key", newFakeFetch(402).fetch);
   expect(stripe.charge(1250, "GBP")).toBe(false);
 });
 ```
 
+Where the library does offer a test hook, as Python's `httpx.MockTransport` does, the adapter takes the library's own type and the test uses the hook: no view is needed.
+
 A driving adapter's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
 
 ```ts
-function newFakeOrderProcessor() { // a test adapter for the driving adapter's own port: the OrderProcessor interface
+function newFakeOrderProcessor() { // a test adapter for the interface the driving adapter takes: OrderProcessor
   const orders: Order[] = [];
   const orderProcessor: OrderProcessor = (order) => {
     orders.push(order);

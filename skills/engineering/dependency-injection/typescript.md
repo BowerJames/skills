@@ -77,7 +77,7 @@ interface RefundsPort { // The port of the refunds module
 
 ```ts
 // infrastructure/adapters/order-processor/stripe
-function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort {
+function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort {
   return {
     charge(amount, currency) { /* ... */ },
     now() { /* ... */ }, // a whole adapter: it satisfies every method of the port
@@ -85,18 +85,18 @@ function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort {
 }
 
 // infrastructure/adapters/refunds/stripe
-function newStripeAdapter(apiKey: string, http: Http): RefundsPort {
+function newStripeAdapter(apiKey: string, fetch: SyncFetch): RefundsPort {
   return {
     refund(amount, currency) { /* ... */ },
   };
 }
 ```
 
-An adapter's constructor can take anything, but like every constructor it must take everything required to measure the adapter's behaviours:
+At the edge, an adapter's constructor takes the library's own object, typed by a view where the library offers no test hook, and like every constructor it must take everything required to measure the adapter's behaviours:
 
 ```ts
 function newStripeAdapter(apiKey: string): OrderProcessorPort {
-  const http = newRealHttp(); // bad: created inside, so a test cannot measure what is sent
+  const fetch = syncFetch; // bad: the library reached directly, so a test cannot measure what is sent
   /* ... */
 }
 ```
@@ -104,7 +104,7 @@ function newStripeAdapter(apiKey: string): OrderProcessorPort {
 ```ts
 function newStripeAdapter(
   apiKey: string,
-  http: Http, // good: passed in, so a test can pass its own and measure what is sent
+  fetch: SyncFetch, // good: the library's function, passed in and typed by a view, so a test can pass a fake and measure what is sent
 ): OrderProcessorPort {
   /* ... */
 }
@@ -153,7 +153,7 @@ Avoid a constructor or implementation that creates or fetches what it needs:
 ```ts
 function newOrderProcessor(): OrderProcessor {
   const apiKey = process.env.STRIPE_API_KEY!; // fetches a resource
-  const port = newStripeAdapter(apiKey, newRealHttp()); // creates its own adapter
+  const port = newStripeAdapter(apiKey, syncFetch); // creates its own adapter
   const currency = process.env.CURRENCY as Currency;     // fetches its own configuration
   return function processOrder(order) {
     const placedAt = new Date();              // fetches a resource
@@ -199,12 +199,12 @@ The examples build on the `OrderProcessor` module above and two adapters for its
 ```ts
 // infrastructure/factories/adapters/order-processor/stripe/factory.ts
 function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory: it returns the port
-  return newStripeAdapter(apiKey, newRealHttp()); // It builds the parts defined in the adapter's package
+  return newStripeAdapter(apiKey, syncFetch); // It passes the library objects the adapter takes
 }
 
 // infrastructure/factories/adapters/order-processor/paypal/factory.ts
 function createPaypalAdapter(apiKey: string): OrderProcessorPort {
-  return newPaypalAdapter(apiKey, newRealHttp());
+  return newPaypalAdapter(apiKey, syncFetch);
 }
 ```
 
@@ -288,7 +288,7 @@ Bad example:
 function createStripeAdapter(): OrderProcessorPort {
   return newStripeAdapter(
     process.env.STRIPE_API_KEY!, // The factory reads the environment.
-    newRealHttp(),
+    syncFetch,
   );
 }
 ```
@@ -299,7 +299,7 @@ Good example, with the values passed in by whatever calls the factory:
 function createStripeAdapter(apiKey: string): OrderProcessorPort {
   return newStripeAdapter(
     apiKey,
-    newRealHttp(), // Constructing reaches no resource: the http function only reaches the network when called.
+    syncFetch, // Passing the library's function reaches no resource: it only reaches the network when called.
   );
 }
 
@@ -346,7 +346,7 @@ Bad example, a second way of constructing added beside the implementation:
 export function newOrderProcessor(port: OrderProcessorPort, currency: Currency): OrderProcessor { /* ... */ }
 
 export function newStripeOrderProcessor(apiKey: string): OrderProcessor { // A second constructor: the module's package now knows about an adapter.
-  return newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), "GBP");
+  return newOrderProcessor(newStripeAdapter(apiKey, syncFetch), "GBP");
 }
 ```
 
@@ -356,7 +356,7 @@ Bad examples:
 
 ```ts
 function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
-  const port = newStripeAdapter(apiKey, newRealHttp()); // A module factory calls an adapter's constructor, so it must know what the adapter is made of.
+  const port = newStripeAdapter(apiKey, syncFetch); // A module factory calls an adapter's constructor, so it must know what the adapter is made of.
   return newOrderProcessor(port, currency);
 }
 ```

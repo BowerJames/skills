@@ -9,9 +9,11 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 | **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[Order], Receipt]` |
 | **Port** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
 | **Adapter** | a class or function satisfying the port's shape |
+| **Domain interface** | a `typing.Protocol` in the domain package — `AgentTool` |
 | **Driven adapter** | an adapter satisfying a module's port — `StripeAdapter` for `OrderProcessorPort` |
 | **Driving adapter** | an adapter satisfying the shape its entrypoint calls — a FastAPI `APIRouter`, a command `Callable[[list[str]], None]` |
 | **Entrypoint** | the framework or runtime that calls the program, never written in it — FastAPI, Click, Celery, or Python running a file as `__main__` |
+| **View** | a `typing.Protocol` in an edge adapter's package, describing the part of a library's object it uses — needed only when the library has no test hook (`httpx` has one: `httpx.MockTransport`) |
 | **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the port and returns it |
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
 | **Error** | an `Exception` subclass |
@@ -66,20 +68,20 @@ class OrderProcessorImpl: # Implementation of the module
         return Receipt(total=total, currency=self.currency)
 
 class StripeAdapter(OrderProcessorPort): # Adapter for the port
-    def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
+    def __init__(self, api_key: str, http: httpx.Client): ... # Constructor for the stripe adapter
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
 
 class PaypalAdapter(OrderProcessorPort): # Adapter for the port
-    def __init__(self, api_key: str, http: HTTP): ... # Constructor for the paypal adapter
+    def __init__(self, api_key: str, http: httpx.Client): ... # Constructor for the paypal adapter
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
 
 def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the stripe adapter
-    return StripeAdapter(api_key, RealHTTP())
+    return StripeAdapter(api_key, httpx.Client())
 
 def create_paypal_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the paypal adapter
-    return PaypalAdapter(api_key, RealHTTP())
+    return PaypalAdapter(api_key, httpx.Client())
 
 def create_order_processor(
         provider: Literal["stripe", "paypal"],
@@ -101,13 +103,13 @@ The adapter handles what it can decide and lets everything else propagate:
 
 ```python
 class StripeAdapter(OrderProcessorPort):
-    def __init__(self, api_key: str, http: HTTP):
+    def __init__(self, api_key: str, http: httpx.Client):
         self.api_key = api_key
         self.http = http
 
     def charge(self, amount: int, currency: Currency) -> bool:
-        response = self.http(Request(...)) # a network error propagates unchanged
-        if response.status == 402:
+        response = self.http.post(...) # a network error propagates unchanged
+        if response.status_code == 402:
             return False # handled: a decline is an answer the port can give
         return True
 ```
@@ -117,7 +119,7 @@ Wrapping hides the error's origin:
 ```python
     def charge(self, amount: int, currency: Currency) -> bool:
         try:
-            response = self.http(Request(...))
-        except ConnectionError as error:
+            response = self.http.post(...)
+        except httpx.ConnectError as error:
             raise PaymentFailed() from error # bad: wraps an error the adapter did not determine
 ```

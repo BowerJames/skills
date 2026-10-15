@@ -79,23 +79,23 @@ class RefundsPort(Protocol): # The port of the refunds module
 
 ```python
 class StripeAdapter(OrderProcessorPort): # infrastructure/adapters/order_processor/stripe
-    def __init__(self, api_key: str, http: HTTP): ...
+    def __init__(self, api_key: str, http: httpx.Client): ...
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
     def now(self) -> datetime: ... # a whole adapter: it satisfies every method of the port
 
 class StripeAdapter(RefundsPort): # infrastructure/adapters/refunds/stripe
-    def __init__(self, api_key: str, http: HTTP): ...
+    def __init__(self, api_key: str, http: httpx.Client): ...
 
     def refund(self, amount: int, currency: Currency) -> bool: ...
 ```
 
-An adapter's constructor can take anything, but like every constructor it must take everything required to measure the adapter's behaviours:
+At the edge, an adapter's constructor takes the library's own object, and like every constructor it must take everything required to measure the adapter's behaviours:
 
 ```python
 class StripeAdapter(OrderProcessorPort):
     def __init__(self, api_key: str):
-        self.http = RealHTTP() # bad: created inside, so a test cannot measure what is sent
+        self.http = httpx.Client() # bad: created inside, so a test cannot measure what is sent
 ```
 
 ```python
@@ -103,7 +103,7 @@ class StripeAdapter(OrderProcessorPort):
     def __init__(
         self,
         api_key: str,
-        http: HTTP # good: passed in, so a test can pass its own and measure what is sent
+        http: httpx.Client # good: the library's own client, passed in, so a test can pass one on httpx.MockTransport and measure what is sent
     ): ...
 ```
 
@@ -152,7 +152,7 @@ Avoid a constructor or implementation that creates or fetches what it needs:
 class OrderProcessorImpl:
     def __init__(self):
         api_key = os.environ["STRIPE_API_KEY"]   # fetches a resource
-        self.port = StripeAdapter(api_key, RealHTTP())  # creates its own adapter
+        self.port = StripeAdapter(api_key, httpx.Client())  # creates its own adapter
         self.currency = os.environ["CURRENCY"]   # fetches its own configuration
 
     def __call__(self, order: Order) -> Receipt:
@@ -198,11 +198,11 @@ The examples build on the `OrderProcessor` module above and two adapters for its
 ```python
 # infrastructure/factories/adapters/order_processor/stripe/factory.py
 def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory: it returns the port
-    return StripeAdapter(api_key, RealHTTP()) # It builds the parts defined in the adapter's package
+    return StripeAdapter(api_key, httpx.Client()) # It builds the library objects the adapter takes
 
 # infrastructure/factories/adapters/order_processor/paypal/factory.py
 def create_paypal_adapter(api_key: str) -> OrderProcessorPort:
-    return PaypalAdapter(api_key, RealHTTP())
+    return PaypalAdapter(api_key, httpx.Client())
 ```
 
 ## Rule 4: a factory returns the interface
@@ -277,7 +277,7 @@ Bad example:
 def create_stripe_adapter() -> OrderProcessorPort:
     return StripeAdapter(
         api_key=os.environ["STRIPE_API_KEY"], # The factory reads the environment.
-        http=RealHTTP()
+        http=httpx.Client()
     )
 ```
 
@@ -287,7 +287,7 @@ Good example, with the values passed in by whatever calls the factory:
 def create_stripe_adapter(api_key: str) -> OrderProcessorPort:
     return StripeAdapter(
         api_key=api_key,
-        http=RealHTTP() # Constructing reaches no resource: RealHTTP only reaches the network when called.
+        http=httpx.Client() # Constructing reaches no resource: the client only reaches the network when called.
     )
 
 def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
@@ -332,7 +332,7 @@ class OrderProcessorImpl:
 
     @classmethod
     def with_stripe(cls, api_key: str) -> "OrderProcessorImpl": # A second constructor: the implementation now knows about an adapter.
-        return cls(StripeAdapter(api_key, RealHTTP()), "GBP")
+        return cls(StripeAdapter(api_key, httpx.Client()), "GBP")
 ```
 
 ## Rule 8: a factory calls one entity's constructor, and gets everything else from factories
@@ -341,7 +341,7 @@ Bad examples:
 
 ```python
 def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
-    port = StripeAdapter(api_key, RealHTTP()) # A module factory calls an adapter's constructor, so it must know what the adapter is made of.
+    port = StripeAdapter(api_key, httpx.Client()) # A module factory calls an adapter's constructor, so it must know what the adapter is made of.
     return OrderProcessorImpl(port, currency)
 ```
 

@@ -79,42 +79,51 @@ def test_refuses_an_order_the_port_declines():
 
 ## Testing the infrastructure
 
-An adapter is tested through the port it satisfies and its own constructor. A `StripeAdapter` that takes its HTTP dependency in the constructor can be unit tested with a test adapter:
+An adapter is tested through the interface it satisfies and its own constructor. A `StripeAdapter` that takes the library's own `httpx.Client` is unit tested with the library's own test hook, `httpx.MockTransport`: a real client that answers from a function, with no network:
 
 ```python
-type HTTP = Callable[[Request], Response]
-
 class StripeAdapter(OrderProcessorPort):
-    def __init__(self, api_key: str, http: HTTP): ... # everything required to measure its behaviours
+    def __init__(self, api_key: str, http: httpx.Client): ... # everything required to measure its behaviours
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
 ```
 
 ```python
-class FakeHTTP:                                  # a test adapter for the adapter's own port; HTTP is a type, so there is nothing to inherit
-    def __init__(self, status: int = 200) -> None:
-        self.status = status
-        self.requests: list[Request] = []
-
-    def __call__(self, request: Request) -> Response:
-        self.requests.append(request)
-        return Response(status=self.status)
+def client_answering(status: int, sent: list[httpx.Request]) -> httpx.Client: # harness: a client on the library's test hook
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)                     # records what goes out
+        return httpx.Response(status)            # decides what comes in
+    return httpx.Client(transport=httpx.MockTransport(answer))
 
 def test_charge_sends_the_currency_in_lower_case():
-    http = FakeHTTP()
-    stripe = StripeAdapter(api_key="test-key", http=http)
+    sent: list[httpx.Request] = []
+    stripe = StripeAdapter(api_key="test-key", http=client_answering(200, sent))
     stripe.charge(1250, "GBP")                   # driven through the port it satisfies
-    assert http.requests[0].body["currency"] == "gbp"
+    assert json.loads(sent[0].content)["currency"] == "gbp"
 
 def test_charge_answers_false_when_the_card_is_declined():
-    stripe = StripeAdapter(api_key="test-key", http=FakeHTTP(status=402))
+    stripe = StripeAdapter(api_key="test-key", http=client_answering(402, []))
     assert stripe.charge(1250, "GBP") is False
+```
+
+Where a library offers no test hook, the adapter declares a view of the part of it that it uses, and the test passes a fake of the view:
+
+```python
+class Publisher(Protocol):                       # a view: the library's broker client satisfies it by shape
+    def publish(self, topic: str, body: bytes) -> None: ...
+
+class FakePublisher:                             # a test adapter for the view
+    def __init__(self) -> None:
+        self.published: list[tuple[str, bytes]] = []
+
+    def publish(self, topic: str, body: bytes) -> None:
+        self.published.append((topic, body))
 ```
 
 A driving adapter's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
 
 ```python
-class FakeOrderProcessor:                        # a test adapter for the driving adapter's own port: the OrderProcessor interface
+class FakeOrderProcessor:                        # a test adapter for the interface the driving adapter takes: OrderProcessor
     def __init__(self) -> None:
         self.orders: list[Order] = []
 
