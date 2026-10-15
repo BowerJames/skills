@@ -145,7 +145,7 @@ An adapter that connects one module to another is named for the module it calls:
 - An adapter never imports another adapter. Adapters are combined at runtime: a factory passes one to another's constructor, typed as the interface it satisfies. An adapter that wraps another adapter of the same port, such as `retrying`, receives it that way, and so does an adapter that offers a module a set of adapters of a domain interface.
 - An adapter's export file exports its constructor, its own ports, and the parts that satisfy them in production. Within `src`, only the adapter's own adapter factory package imports them. Its unit tests import its constructor and its own ports.
 - An adapter's package organises its contents however it wants. Whatever the adapter's constructor takes — its own ports, and what satisfies them — and any error it determines is defined inside the adapter's package. The exceptions are a module's interface and a domain interface: they are defined where they belong, and what satisfies them is passed in by a factory.
-- Two adapters share no code, even when they reach the same resource or differ in one detail. Each holds what it needs.
+- Two adapters generally hold their own code, even when they reach the same resource or differ in one detail. Code shared between adapters is something to watch for: rule 8 covers what it usually means.
 
 This improves **locality for maintainers** since the path of an adapter names the module, entrypoint or domain interface it serves, and everything one adapter knows is in one package.
 
@@ -205,7 +205,13 @@ There is no `utils`, `common`, `shared` or `helpers` package. A helper used by o
 
 A helper never goes in the domain package: it carries behaviour, and the domain package holds data carriers and domain interfaces only.
 
-Reusable behaviour between adapters is reached through an interface, never by importing. A generic adapter, such as a tool built from a schema, is an adapter of a domain interface like any other, and a factory passes it to whatever needs it.
+**Watch for code shared between adapters.** It is not forbidden, but it is usually a sign that a capability wants a home of its own, so that it can be passed to constructors instead of copied or imported. Before sharing, ask what the code is:
+
+- **Behaviour, including the translation of a provider's format**, such as a client that builds a provider's requests, parses its responses and maps its errors, is usually a module, with a port for any resource it reaches (`tpfg_proxy`, with an HTTP port its adapter satisfies). Its consumers receive it through their constructors.
+- **Glue around a third-party library** usually belongs in the adapter that uses it, or in a generic adapter of a domain interface that others wrap, such as a tool built from a schema.
+- **Something too small for either**, a line of formatting or a constant, is often best left as two copies, especially when they are likely to change apart.
+
+When none of these fits, sharing is a judgement call: name the shared package for what it does, and never make one adapter import another.
 
 This improves **leverage for callers** since a package's name says what it offers.
 

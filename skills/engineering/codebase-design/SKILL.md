@@ -87,6 +87,8 @@ Split behaviour out into its own module when one of these holds:
 - **A second module needs it.** Two modules cannot share implementation code, so behaviour both need has to sit behind an interface of its own.
 - **It must be swappable.** The module that uses it should work with more than one version of it. If this is the only reason, it may be an adapter for that module's port and not a module.
 
+Watch for code shared between adapters: it is often the first sign of one of these reasons. Behaviour that several adapters need, such as translating a provider's requests and responses, may want to be a module they receive through their constructors rather than code they each copy or import.
+
 ## Principles
 
 - **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its port.
