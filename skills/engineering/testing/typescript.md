@@ -143,6 +143,18 @@ test("cli reads each cost into an order item", () => {
 });
 ```
 
+Where the entrypoint provides a test client that reaches no resource, the test may drive the adapter through it, as the entrypoint calls it. Fastify's `inject` sends a request without opening a socket. The adapter is still built by its constructor with test adapters, never by its factory:
+
+```ts
+test("orders route reads each cost into an order item", async () => {
+  const { orderProcessor, orders } = newFakeOrderProcessor();
+  const app = Fastify();
+  app.register(newOrdersRoutes(orderProcessor)); // the driving adapter's constructor, given a test adapter
+  await app.inject({ method: "POST", url: "/orders", payload: { id: "order_id", costs: [100, 40] } });
+  expect(orders[0].items.map((item) => item.cost)).toEqual([100, 40]);
+});
+```
+
 Integration tests and end-to-end tests are kept apart from the unit tests by directory, so the default run needs no environment:
 
 ```ts

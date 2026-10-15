@@ -12,7 +12,7 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Type
 | **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts` |
 | **Module factory package** | `infrastructure/factories/modules/<module-name>`, with the factories in `factory.ts` |
 | **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, or `<entrypoint-name>/<adapter-name>` for a driving adapter, with the factories in `factory.ts` |
-| **Entrypoint** | the framework or runtime that calls the program, never written in it: Express, Fastify, Commander, or Node running a file, named `main` |
+| **Entrypoint** | the framework or runtime that calls the program, never written in it: Fastify, Commander, or Node running a file, named `main` |
 | **Driving adapter** | a function returned by a constructor in `infrastructure/adapters/<entrypoint-name>/<adapter-name>` — `newCli` in `infrastructure/adapters/main/cli/adapter.ts` |
 | **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.ts` |
 
@@ -272,20 +272,43 @@ const cli = createCli(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!
 cli(process.argv.slice(2));
 ```
 
-With a framework as the entrypoint, the startup code registers the driving adapters with it instead, and the framework defines the port. For Express, a driving adapter is a function returning a `Router`, and the startup code mounts each in the app:
+With a framework as the entrypoint, the startup code registers the driving adapters with it instead, and the framework defines the port. For Fastify, a driving adapter is a plugin, and the startup code registers each with the app:
 
 ```ts
-// src/infrastructure/startup/express.ts
-import express from "express";
-import { createOrdersRouter } from "../factories/adapters/express/orders-router";
+// src/infrastructure/startup/fastify.ts
+import Fastify from "fastify";
+import { createOrdersRoutes } from "../factories/adapters/fastify/orders-routes";
 import { createOrderProcessor } from "../factories/modules/order-processor";
 
-const app = express(); // The entrypoint, configured
-app.use(createOrdersRouter(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP")));
-app.listen(3000);
+const app = Fastify(); // The entrypoint, configured
+app.register(createOrdersRoutes(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP")));
+await app.listen({ port: 3000 });
 ```
 
-When the entity a driving adapter drives holds one request's resources, such as a caller's socket, the driving adapter takes the opening of it as its own port, a function returning the module's interface, and the startup code satisfies it with a module factory.
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+
+```ts
+// src/infrastructure/adapters/fastify/call-routes/adapter.ts
+import type { FastifyPluginAsync } from "fastify";
+import type { WebSocket } from "ws";
+import type { CallDetails, PhoneCall } from "../../../../core/phone-call";
+
+export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // The driving adapter's own port: opening the entity per request
+
+export function newCallRoutes(path: string, openCall: OpenPhoneCall): FastifyPluginAsync { // Its constructor: returns the plugin Fastify calls
+  return async (app) => {
+    app.get<{ Querystring: { ddiNo: string } }>(path, { websocket: true }, async (socket, request) => {
+      await openCall(socket, { ddiNumber: request.query.ddiNo }).run();
+    });
+  };
+}
+```
+
+```ts
+// src/infrastructure/startup/fastify.ts
+app.register(fastifyWebsocket);
+app.register(createCallRoutes("/call", createPhoneCall)); // The adapter factory, given the phone call's module factory as the opener
+```
 
 ## Example 3: a module that needs another module
 

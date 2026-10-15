@@ -11,6 +11,9 @@ The style throughout: **no classes**. Entities are functions and object literals
 | **Interface** | for object shapes, an `interface`; for functions, a type — `(order: Order) => Receipt` |
 | **Port** | for object shapes, an `interface`; for functions, a type — `() => Date` |
 | **Adapter** | an object literal or function satisfying the port's shape |
+| **Driven adapter** | an adapter satisfying a module's port — `newStripeAdapter`'s object for `OrderProcessorPort` |
+| **Driving adapter** | an adapter satisfying the shape its entrypoint calls — a Fastify plugin, a command `(argv: string[]) => void` |
+| **Entrypoint** | the framework or runtime that calls the program, never written in it — Fastify, Commander, or Node running a file |
 | **Constructor** | the function that takes the port and returns the entity |
 | **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
 | **Error** | a subclass of `Error` |

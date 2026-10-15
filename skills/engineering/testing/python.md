@@ -129,6 +129,17 @@ def test_cli_reads_each_cost_into_an_order_item():
     assert [item.cost for item in order_processor.orders[0].items] == [100, 40]
 ```
 
+Where the entrypoint provides a test client that reaches no resource, the test may drive the adapter through it, as the entrypoint calls it. The adapter is still built by its constructor with test adapters, never by its factory:
+
+```python
+def test_the_orders_route_reads_each_cost_into_an_order_item():
+    order_processor = FakeOrderProcessor()
+    app = FastAPI()
+    app.include_router(orders_router(order_processor))   # the driving adapter's constructor, given a test adapter
+    TestClient(app).post("/orders", json={"id": "order_id", "costs": [100, 40]})
+    assert [item.cost for item in order_processor.orders[0].items] == [100, 40]
+```
+
 Integration tests and end-to-end tests are kept apart from the unit tests with markers, so the default run needs no environment:
 
 ```python

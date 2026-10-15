@@ -314,16 +314,22 @@ With a framework as the entrypoint, the startup code registers the driving adapt
 
 ```python
 # infrastructure/startup/fastapi.py
+import os
+
 from fastapi import FastAPI
 
 from infrastructure.factories.adapters.fastapi.orders_router import create_orders_router
 from infrastructure.factories.modules.order_processor import create_order_processor
 
 app = FastAPI() # The entrypoint, configured: uvicorn runs infrastructure.startup.fastapi:app
-app.include_router(create_orders_router(create_order_processor(...)))
+app.include_router(
+    create_orders_router(
+        create_order_processor(provider="stripe", api_key=os.environ["STRIPE_API_KEY"], currency="GBP")
+    )
+)
 ```
 
-When the entity a driving adapter drives holds one request's resources, such as a caller's socket, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory:
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
 
 ```python
 # infrastructure/adapters/fastapi/call_router/router.py
