@@ -166,7 +166,7 @@ No factory lives in the core, because building an entity means importing what it
 - A module factory package imports its module's constructor and interface from the module's export file, adapter factories from adapter factory packages, and other modules' factories from their module factory packages. It never imports from an adapter's package.
 - An adapter factory package imports its adapter's constructor from the adapter's export file, the library objects it builds from their library, and anything else the adapter takes from other factory packages.
 
-What a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
+A factory is synchronous and reaches no resource. What else a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
 
 This improves **locality for maintainers** since every factory is found in one directory, and the path of each one names what it builds.
 

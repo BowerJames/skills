@@ -79,7 +79,7 @@ This improves **testability for everyone** since every behaviour sits behind a c
 
 ### 6. A factory reaches no resource
 
-A factory never reads an environment variable, reads a settings file or opens a connection. A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the startup code, a settings loader, a test — is a design decision.
+A factory never reads an environment variable, reads a settings file or opens a connection, and so it is synchronous: a factory that has to wait on something is reaching for a resource. A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the startup code, a settings loader, a test — is a design decision.
 
 This improves **locality for maintainers** since how the program is wired and how it reads its environment change independently.
 
