@@ -38,7 +38,7 @@ _Avoid_: acceptance test, system test, smoke test.
 A good test verifies one **Behaviour** of one **Entity under test** — nothing else.
 
 - **Through the constructor and interface.** It calls the constructor of the entity under test with test adapters and configuration, drives the entity through its interface, and observes outcomes only through the interface and the test adapters. The implementation can change entirely while behaviour holds; the test doesn't notice.
-- **Never through a factory.** A factory chooses production adapters, and they reach resources when called, so a unit test never calls one.
+- **Never through a factory.** A factory builds production entities, and they reach resources when called, so a unit test never calls one.
 - **Reads like a specification.** Named for the behaviour it verifies — "charges the port the order total" — so the suite is a list of behaviours, and the **test harness** reports each present or absent. A name promising one behaviour while the assertions check another is a test carrying two behaviours.
 - **One behaviour, one set of conditions.** A test is one exercise of one behaviour; a second condition is a second test.
 - **Independent expectations.** The expected outcome comes from an independent source of truth: a worked example, a known-good value, test harness code, the spec. Never from running the implementation.

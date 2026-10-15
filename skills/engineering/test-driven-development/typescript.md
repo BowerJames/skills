@@ -209,4 +209,4 @@ The cycles continue until the required behaviours are all pinned. A behaviour su
 
 ## After the cycles
 
-The module now exists in the core and has only ever been constructed with a test adapter. The Stripe adapter for `OrderProcessorPort` is driven by its own cycles, with a test adapter for its HTTP port. The factory and the startup code are written last: see [project-structure](../project-structure/SKILL.md) for where they go and [dependency-injection](../dependency-injection/SKILL.md) for what the factory does.
+The module now exists in the core and has only ever been constructed with a test adapter. The Stripe adapter for `OrderProcessorPort` is driven by its own cycles, with a test adapter for its HTTP port. The adapter factories, the module factory and the startup code are written last: see [project-structure](../project-structure/SKILL.md) for where they go and [dependency-injection](../dependency-injection/SKILL.md) for what the factories do.

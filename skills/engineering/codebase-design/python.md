@@ -70,15 +70,21 @@ class PaypalAdapter(OrderProcessorPort): # Adapter for the port
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
 
+def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the stripe adapter
+    return StripeAdapter(api_key, RealHTTP())
+
+def create_paypal_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the paypal adapter
+    return PaypalAdapter(api_key, RealHTTP())
+
 def create_order_processor(
         provider: Literal["stripe", "paypal"],
         api_key: str,
         currency: Currency
-    ) -> OrderProcessor: # A factory for the order processor module
+    ) -> OrderProcessor: # A module factory for the order processor module
     if provider == "stripe":
-        port = StripeAdapter(api_key, RealHTTP())
+        port = create_stripe_adapter(api_key)
     elif provider == "paypal":
-        port = PaypalAdapter(api_key, RealHTTP())
+        port = create_paypal_adapter(api_key)
     return OrderProcessorImpl(port, currency)
 ```
 

@@ -9,7 +9,7 @@ description: Discipline for how entities get their dependencies: what a construc
 
 # Dependency Injection
 
-Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a module receives an **Adapter** for its **Port**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: it chooses adapters and calls the constructor. The aim is that every resource sits behind a port, the port is declared in the constructor, the **Interface** carries only data, and nothing reaches a resource while entities are being built.
+Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a module receives an **Adapter** for its **Port**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: a module factory chooses adapters and calls the module's constructor, and an adapter factory builds an adapter. The aim is that every resource sits behind a port, the port is declared in the constructor, the **Interface** carries only data, and nothing reaches a resource while entities are being built.
 
 Where factories live on disk is covered by [project-structure](../project-structure/SKILL.md).
 
@@ -24,7 +24,7 @@ A module's constructor takes at most one parameter that carries behaviour: the m
 - **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
 - **A port holds only what the module calls.** It is shaped by the module's needs, not copied from the adapter that will satisfy it.
 
-Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. An object from a library that reaches no resource is configuration, not a port.
+Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier, never an object from a library: a module is self-contained, so what a library provides reaches it through its port.
 
 An adapter's constructor is not limited to the module's port: it can take ports of its own, satisfied by other entities, or anything else it needs. Like every constructor, it must take everything required to measure the adapter's behaviours.
 
@@ -54,11 +54,14 @@ This improves **testability for everyone** since constructing any entity is safe
 
 ## The factory
 
-A factory for a module is code that calls the module's constructor and returns the entity. It is never the constructor itself: the constructor accepts the port, and the factory supplies an adapter for it.
+A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. There are two kinds:
+
+- **A module factory** builds a module: it gets an adapter for the module's port and calls the module's constructor.
+- **An adapter factory** builds an adapter: it builds the parts the adapter's constructor takes and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
 
 ### 4. A factory returns the interface
 
-A factory declares its return type as the interface of the module, never the implementation.
+A module factory declares its return type as the interface of the module. An adapter factory declares its return type as the port the adapter satisfies. Neither returns the implementation.
 
 This improves **leverage for callers** since a caller of the factory learns only the interface.
 
@@ -66,7 +69,7 @@ This improves **locality for maintainers** since the implementation can be renam
 
 ### 5. A factory only wires
 
-A factory chooses adapters, calls their constructors and calls the module's constructor. It does nothing else. Anything worth testing belongs in a module or an adapter.
+A factory calls constructors and other factories, and returns what it built. It does nothing else. Anything worth testing belongs in a module or an adapter.
 
 What a factory takes is a design decision that depends on its use case. It may take nothing, parameters that select between choices, configuration values, adapters, entities of other modules, or anything else. Whether it builds a new entity on every call or returns one it has kept is a design decision too.
 
@@ -82,19 +85,22 @@ This improves **testability for everyone** since a factory can be called with an
 
 ### 7. One constructor, many factories
 
-A module has a single constructor. Each factory is one way of supplying it: one per choice of adapters, or one per environment. A new way of building the module is a new factory, never a second constructor and never a change to the interface.
+An entity has a single constructor. Each factory is one way of supplying it: one per choice of adapters, or one per environment. A new way of building a module or an adapter is a new factory, never a second constructor and never a change to the interface.
 
 This improves **flexibility for designers** since a new combination of adapters is added without touching the module.
 
-### 8. A factory never calls another module's constructor
+### 8. A factory calls one entity's constructor, and gets everything else from factories
 
-A factory that needs an entity of another module calls one of that module's factories, or takes the entity as a parameter. It never calls another module's constructor.
+A factory calls the constructor of the entity it builds and, for an adapter, the constructors of the parts defined in the adapter's package. Every other entity it needs comes from that entity's factory or as a parameter.
 
-This improves **locality for maintainers** since the knowledge of how a module is built stays with that module's factories.
+- A module factory never calls an adapter's constructor. It calls the adapter's factory.
+- A factory never calls another module's constructor. It calls one of that module's factories, or takes the entity as a parameter.
+
+This improves **locality for maintainers** since the knowledge of how an entity is built stays with that entity's factories: a module factory chooses adapters without knowing what they are made of.
 
 ## Language idioms
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor` and a `create_order_processor` factory
-- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor` and a `createOrderProcessor` factory
+- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor`, a `create_order_processor` module factory and a `create_stripe_adapter` adapter factory
+- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor`, a `createOrderProcessor` module factory and a `createStripeAdapter` adapter factory

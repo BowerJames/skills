@@ -15,7 +15,7 @@ Project structure is the mapping of entities onto files. The structure is hexago
 ```
 src/
   core/
-    domain/                          # value types shared by every module
+    domain/                          # data carriers that belong to no one module
     <module_name>/
       interface                      # the module's interface
       port                           # the module's port, if it has one
@@ -27,7 +27,11 @@ src/
       <module_name>/
         <adapter_name>/              # an adapter for that module's port
     factories/
-      <module_name>/                 # the factories that wire adapters into that module
+      modules/
+        <module_name>/               # the module factories of that module
+      adapters/
+        <module_name>/
+          <adapter_name>/            # the adapter factories of that adapter
     entrypoints/                     # code that drives the modules from outside the program
 tests/
   unit/                              # mirrors src/
@@ -41,7 +45,7 @@ tests/
 
 **Infrastructure** — the `infrastructure` directory: the adapters, the factories and the entrypoints. Everything that reaches a resource lives here, though not everything here reaches one.
 
-**Package** — the directory that holds the code of one module, one adapter, or the factories of one module. One module, one package; one adapter, one package; one module's factories, one package.
+**Package** — the directory that holds the code of one module, one adapter, or the factories of one module or one adapter. One module, one package; one adapter, one package; one entity's factories, one package.
 
 _Avoid_: folder (says nothing about ownership), module (already means a package in the core with an interface, an implementation and a port, not any place on disk).
 
@@ -49,7 +53,7 @@ _Avoid_: folder (says nothing about ownership), module (already means a package 
 
 _Avoid_: public API (interface already names what callers must know), barrel (names the mechanism, not the role), entry point (too close to entrypoint).
 
-**Domain package** — the `core/domain` package, holding the value types that belong to no one module and mean the same thing in every module: `Currency`, `CustomerId`. One file per concept, named for the concept. `domain` is a reserved name: no module is called `domain`.
+**Domain package** — the `core/domain` package, holding data carriers and nothing else: the ones that belong to no one module and mean the same thing in every module, such as `Currency` and `CustomerId`. Nothing with behaviour goes in it. One file per concept, named for the concept. `domain` is a reserved name: no module is called `domain`.
 
 _Avoid_: utils, common, shared, helpers (names that say only that something is shared, so they accept anything).
 
@@ -61,7 +65,9 @@ _Avoid_: controller, inbound adapter, driving adapter.
 
 _Avoid_: container, composition root, bootstrap.
 
-**Factory package** — the `infrastructure/factories/<module_name>` package, holding the factories of one module: the code that chooses adapters and passes them to the module's constructor.
+**Module factory package** — the `infrastructure/factories/modules/<module_name>` package, holding the module factories of one module: the code that gets adapters from their factories and passes them to the module's constructor.
+
+**Adapter factory package** — the `infrastructure/factories/adapters/<module_name>/<adapter_name>` package, holding the adapter factories of one adapter: the code that builds the adapter's parts and passes them to the adapter's constructor.
 
 _Avoid_: container, composition root, bootstrap.
 
@@ -71,8 +77,8 @@ _Avoid_: container, composition root, bootstrap.
 
 ### 1. Imports point inward
 
-- The domain package imports nothing else in the project.
-- A module's package imports only from the domain package. It never imports another module's package and never imports from the infrastructure.
+- The domain package imports nothing: not the rest of the project, not a third-party library.
+- A module's package imports only from the domain package. It never imports another module's package, never imports from the infrastructure, and never imports a third-party library.
 - The infrastructure imports from the core. The core never imports from the infrastructure.
 
 This improves **locality for maintainers** since a change to an adapter, an entrypoint or another module cannot reach into a module's package.
@@ -81,10 +87,10 @@ This improves **testability for everyone** since a module can be constructed wit
 
 ### 2. The core holds modules and data carriers, nothing else
 
-- **The domain package holds data carriers only**, and only the value types that belong to no one module. Anything that carries behaviour is either a module in the core or an adapter in the infrastructure.
+- **The domain package holds data carriers only**, and only those that belong to no one module. Nothing with behaviour goes in it: anything that carries behaviour is either a module in the core or an adapter in the infrastructure.
 - **Every other package in the core is a module.** It has an interface, an implementation and at most one port. The core holds no adapters, no factories and no entrypoints.
 - **A module never imports another module.** A module that needs another module adds what it needs to its own port. An adapter in `infrastructure/adapters/<module_name>` satisfies the port by calling the other module through its interface.
-- **The core imports a third-party library only if the library reaches no resource internally.** A library that reaches a resource internally is imported only from the infrastructure, behind an adapter.
+- **A module is self-contained.** It depends only on the data carriers of the domain package and on its own port. A third-party library is imported only from the infrastructure, and a module reaches what it provides through its port. The language's built-ins and the parts of its standard library that reach no resource are part of the language, not dependencies.
 
 Whether behaviour that reaches no resource is a module in the core or an adapter in the infrastructure is a design decision. As a module it has its own interface and port, and other modules reach it through their port and an adapter. As an adapter it exists only to satisfy one module's port.
 
@@ -107,7 +113,7 @@ Each export has its own importers:
 
 - **The interface, the data carriers and the errors** may be imported by anything in the infrastructure: entrypoints, factories, and adapters that connect another module to this one.
 - **The port** is imported by the adapters that satisfy it, and by test adapters.
-- **The constructor** is imported only by the module's factory package and by the module's unit tests. An entrypoint or an adapter never imports it.
+- **The constructor** is imported only by the module's module factory package and by the module's unit tests. An entrypoint or an adapter never imports it.
 
 This improves **leverage for callers** since the interface, data and errors files show everything a caller must know and nothing else.
 
@@ -121,9 +127,10 @@ An adapter satisfies the whole port. It is placed by its role, not by what it re
 
 An adapter that connects one module to another is named for the module it calls: `infrastructure/adapters/checkout/order_processor`. It translates between the data carriers of the two modules.
 
-- An adapter imports the port it satisfies, and that module's data carriers, from the module's export file, and value types from the domain package.
+- An adapter imports the port it satisfies, and that module's data carriers, from the module's export file, and data carriers from the domain package.
 - An adapter that connects one module to another also imports the other module's interface and data carriers from its export file, and receives the entity through its own constructor.
-- An adapter never imports another adapter. An adapter that wraps another adapter of the same port, such as `retrying`, receives it through its constructor, typed as the port. Within `src`, only the factory package of the same module imports an adapter.
+- An adapter never imports another adapter. An adapter that wraps another adapter of the same port, such as `retrying`, receives it through its constructor, typed as the port.
+- An adapter's export file exports its constructor, its own ports, and the parts that satisfy them in production. Within `src`, only the adapter's own adapter factory package imports them. Its unit tests import its constructor and its own ports.
 - An adapter's package organises its contents however it wants. Whatever the adapter's constructor takes — its own ports, and what satisfies them — and any error it determines is defined inside the adapter's package.
 - Two adapters share no code, even when they reach the same resource or differ in one detail. Each holds what it needs.
 
@@ -131,15 +138,23 @@ This improves **locality for maintainers** since the path of an adapter names th
 
 This improves **flexibility for designers** since adding a capability to a module is adding one package beside the existing adapters.
 
-### 5. Factories live under the module they create
+### 5. Factories live in the factories directory, under what they build
 
-A module's factories live in `infrastructure/factories/<module_name>`, where `<module_name>` matches the module's package in the core. They never live in the core: choosing an adapter means importing it, and the core imports nothing from the infrastructure.
+Every factory lives in `infrastructure/factories`, split at the top by what it builds:
 
-A factory package imports its module's constructor and interface from the module's export file, that module's adapters from their export files, and other modules' factories from their factory packages. What a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
+- **Module factories** live in `infrastructure/factories/modules/<module_name>`, where `<module_name>` matches the module's package in the core.
+- **Adapter factories** live in `infrastructure/factories/adapters/<module_name>/<adapter_name>`, the same path as the adapter's package under `infrastructure/adapters`. Every adapter has an adapter factory package.
 
-This improves **locality for maintainers** since the choice of adapters for a module is made in one package, and its path names the module.
+No factory lives in the core, because building an entity means importing what it is built from, and the core imports nothing from the infrastructure. No factory lives in an adapter's package, so the factories directory is the one place where the program is wired.
 
-This improves **testability for everyone** since a test can skip the factories, call the constructor from the core and pass test adapters.
+- A module factory package imports its module's constructor and interface from the module's export file, adapter factories from adapter factory packages, and other modules' factories from their module factory packages. It never imports from an adapter's package.
+- An adapter factory package imports its adapter's constructor and parts from the adapter's export file, and anything else the adapter takes from other factory packages.
+
+What a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
+
+This improves **locality for maintainers** since every factory is found in one directory, and the path of each one names what it builds.
+
+This improves **testability for everyone** since a test can skip the factories, call a constructor and pass test adapters.
 
 ### 6. Entrypoints drive interfaces
 
@@ -155,7 +170,7 @@ This improves **testability for everyone** since the entrypoint's translation is
 
 A data carrier that appears in a module's interface or port is defined in that module's data file and exported with it. A second module that needs the same data declares its own data carrier in its own data file, and the adapter that connects the two translates between them.
 
-A data carrier goes in the domain package only when it is a value type that belongs to no one module and means the same thing in every module that uses it: `Currency`, `CustomerId`. A data carrier is never moved into the domain package because a second module needs it.
+A data carrier goes in the domain package only when it belongs to no one module and means the same thing in every module that uses it: `Currency`, `CustomerId`. A data carrier is never moved into the domain package because a second module needs it.
 
 A type used only inside one module's implementation stays in that module's implementation and is not exported.
 
@@ -201,5 +216,5 @@ This improves **locality for maintainers** since every crossing between legacy c
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` module with its adapters, its factory package, an entrypoint and its tests
-- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` module with its adapters, its factory package, an entrypoint and its tests
+- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, an entrypoint and its tests
+- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, an entrypoint and its tests

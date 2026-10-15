@@ -34,7 +34,7 @@ An adapter is driven by tests in the same way, through the port it satisfies and
 
 ## After the cycles
 
-The cycles build a module in the core against a test adapter. Once its behaviours are pinned, its production adapters are driven by their own cycles. The factory and the startup code are written last: they hold no behaviour, so no cycle drives them.
+The cycles build a module in the core against a test adapter. Once its behaviours are pinned, its production adapters are driven by their own cycles. The adapter factories, the module factory and the startup code are written last: they hold no behaviour, so no cycle drives them.
 
 ## Language idioms
 

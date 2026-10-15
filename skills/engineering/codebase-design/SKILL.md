@@ -30,7 +30,7 @@ _Avoid_: API, signature (too narrow — they refer only to the type-level surfac
 
 **Port** — An interface defined by an entity that must be provided to its constructor. A module defines at most one port, and that port holds everything the module needs from outside itself.
 
-**Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
+**Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. It is self-contained: it depends only on the data carriers of the domain package and on its own port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
 
 _Avoid_: unit, component, service.
 
@@ -67,7 +67,7 @@ When designing an interface, ask whether you can maintain the range of capabilit
 
 ## When to make a module
 
-A module is the unit that tests are written against, and a connection between two modules costs a port method, an adapter, wiring in a factory and a test adapter. So the default is not to make one.
+A module is the unit that tests are written against, and a connection between two modules costs a port method, an adapter, its adapter factory, wiring in a module factory and a test adapter. So the default is not to make one.
 
 **Default:** new behaviour goes inside an existing module's implementation. An implementation can grow to as many files as it needs without becoming a second module, and its internal code is structured however suits it.
 
@@ -82,6 +82,7 @@ Split behaviour out into its own module when one of these holds:
 - **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its port.
 - **An entity's constructor is not part of its interface.** Adding complexity to the constructor of a module does not increase the complexity of the entity's interface and therefore does not reduce the leverage.
 - **An entity's interface and constructor are the test surface.** Callers and tests drive through the same interface. Behaviours can be measured through the interface and constructor.
+- **A module is self-contained.** It depends on nothing but the data carriers of the domain package, its own port, and the language itself: no other module, no adapter, no third-party library. Anything else it needs is a method on its port.
 - **A port between two modules is a cost paid for independence.** It should buy something: a separate test surface, a second user, or the ability to swap.
 
 ## Errors
@@ -115,5 +116,5 @@ Good entities make testing natural:
 
 The vocabulary above is language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and a factory
-- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and a factory
+- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and their factories
+- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` module with its port, an error it owns, adapters and their factories

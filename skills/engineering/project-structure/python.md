@@ -10,7 +10,8 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 | **Export file** | the package's `__init__.py`, re-exporting names and listing them in `__all__` |
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
 | **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py` |
-| **Factory package** | `infrastructure/factories/<module_name>`, with the factories in `factory.py` |
+| **Module factory package** | `infrastructure/factories/modules/<module_name>`, with the factories in `factory.py` |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, with the factories in `factory.py` |
 | **Entrypoint** | a class in a file in `infrastructure/entrypoints` — `Cli` in `infrastructure/entrypoints/cli.py` |
 | **Startup code** | the `if __name__ == "__main__":` block in the entrypoint's file |
 
@@ -47,9 +48,18 @@ src/
           adapter.py           # PaypalAdapter
           http.py              # HTTP, RealHTTP
     factories/
-      order_processor/
-        __init__.py            # the export file
-        factory.py             # create_order_processor
+      modules/
+        order_processor/
+          __init__.py          # the export file
+          factory.py           # create_order_processor
+      adapters/
+        order_processor/
+          stripe/
+            __init__.py        # the export file
+            factory.py         # create_stripe_adapter
+          paypal/
+            __init__.py        # the export file
+            factory.py         # create_paypal_adapter
     entrypoints/
       cli.py
 ```
@@ -177,33 +187,62 @@ Nothing in `core` imports from `infrastructure`:
 from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad: the core importing an adapter
 ```
 
-## Example 2: the factory package and an entrypoint
+## Example 2: the factory packages and an entrypoint
 
-The factory that chooses an adapter imports the adapters, so it lives in `infrastructure/factories/order_processor`, not in `core/order_processor`:
+The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
 
 ```python
-# infrastructure/factories/order_processor/factory.py
+# infrastructure/adapters/order_processor/stripe/__init__.py
+from .adapter import StripeAdapter
+from .http import HTTP, RealHTTP
+
+__all__ = ["HTTP", "RealHTTP", "StripeAdapter"]
+```
+
+The adapter factory builds the adapter's parts and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+
+```python
+# infrastructure/factories/adapters/order_processor/stripe/factory.py
+from core.order_processor import OrderProcessorPort
+from infrastructure.adapters.order_processor.stripe import RealHTTP, StripeAdapter
+
+def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory: returns the port the adapter satisfies
+    return StripeAdapter(api_key, RealHTTP())
+```
+
+```python
+# infrastructure/factories/adapters/order_processor/stripe/__init__.py
+from .factory import create_stripe_adapter
+
+__all__ = ["create_stripe_adapter"]
+```
+
+The module factory chooses an adapter by calling its adapter factory, and never imports from an adapter's package:
+
+```python
+# infrastructure/factories/modules/order_processor/factory.py
 from typing import Literal
 
 from core.domain.currency import Currency
 from core.order_processor import OrderProcessor, OrderProcessorImpl
-from infrastructure.adapters.order_processor.paypal import PaypalAdapter, RealHTTP as PaypalHTTP
-from infrastructure.adapters.order_processor.stripe import StripeAdapter, RealHTTP as StripeHTTP
+from infrastructure.factories.adapters.order_processor.paypal import create_paypal_adapter
+from infrastructure.factories.adapters.order_processor.stripe import create_stripe_adapter
+from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad: a module factory reaching into an adapter's package
 
 def create_order_processor(
         provider: Literal["stripe", "paypal"],
         api_key: str,
         currency: Currency
-    ) -> OrderProcessor: # A factory for the order processor module
+    ) -> OrderProcessor: # A module factory for the order processor module
     if provider == "stripe":
-        port = StripeAdapter(api_key, StripeHTTP())
+        port = create_stripe_adapter(api_key)
     elif provider == "paypal":
-        port = PaypalAdapter(api_key, PaypalHTTP())
+        port = create_paypal_adapter(api_key)
     return OrderProcessorImpl(port, currency)
 ```
 
 ```python
-# infrastructure/factories/order_processor/__init__.py
+# infrastructure/factories/modules/order_processor/__init__.py
 from .factory import create_order_processor
 
 __all__ = ["create_order_processor"]
@@ -217,7 +256,7 @@ import os
 import sys
 
 from core.order_processor import Order, OrderItem, OrderProcessor
-from infrastructure.factories.order_processor import create_order_processor
+from infrastructure.factories.modules.order_processor import create_order_processor
 
 class Cli: # The entrypoint: calls no module's constructor and no factory, imports no adapter
     def __init__(self, order_processor: OrderProcessor): # Its constructor takes the interface it drives
@@ -290,17 +329,27 @@ class OrderProcessorAdapter(CheckoutPort): # Adapter connecting checkout to the 
         return self.order_processor(order).total
 ```
 
-The checkout factory gets an `OrderProcessor` from the order processor's factory package and passes it to the adapter:
+The adapter's factory gets an `OrderProcessor` from the order processor's module factory package and passes it to the adapter's constructor:
 
 ```python
-# infrastructure/factories/checkout/factory.py
-from core.checkout import Checkout, CheckoutImpl
+# infrastructure/factories/adapters/checkout/order_processor/factory.py
+from core.checkout import CheckoutPort
 from infrastructure.adapters.checkout.order_processor import OrderProcessorAdapter
-from infrastructure.factories.order_processor import create_order_processor
+from infrastructure.factories.modules.order_processor import create_order_processor
 
-def create_checkout(api_key: str) -> Checkout: # A factory for the checkout module
-    order_processor = create_order_processor("stripe", api_key, "GBP")
-    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+def create_order_processor_adapter(api_key: str) -> CheckoutPort: # An adapter factory for the connecting adapter
+    return OrderProcessorAdapter(create_order_processor("stripe", api_key, "GBP"))
+```
+
+The checkout module factory gets its adapter from that factory:
+
+```python
+# infrastructure/factories/modules/checkout/factory.py
+from core.checkout import Checkout, CheckoutImpl
+from infrastructure.factories.adapters.checkout.order_processor import create_order_processor_adapter
+
+def create_checkout(api_key: str) -> Checkout: # A module factory for the checkout module
+    return CheckoutImpl(create_order_processor_adapter(api_key))
 ```
 
 ## Example 4: the tests
@@ -364,6 +413,12 @@ src/
         legacy_billing/
           __init__.py
           adapter.py             # LegacyBillingAdapter: satisfies OrderProcessorPort by calling billing.py
+    factories/
+      adapters/
+        order_processor/
+          legacy_billing/
+            __init__.py
+            factory.py           # create_legacy_billing_adapter
 ```
 
 ```python
@@ -382,12 +437,12 @@ Legacy code that needs an `OrderProcessor` calls the factory and drives the inte
 
 ```python
 # src/views.py, legacy code
-from infrastructure.factories.order_processor import create_order_processor   # good: a factory
-from core.order_processor import OrderProcessorImpl                          # bad: the constructor
+from infrastructure.factories.modules.order_processor import create_order_processor   # good: a module factory
+from core.order_processor import OrderProcessorImpl                                  # bad: the constructor
 ```
 
 ## Checking the rules
 
-[import-linter](https://import-linter.readthedocs.io/) can enforce the import rules: a `layers` contract places `infrastructure` above `core`, a `forbidden` contract stops `core.domain` importing from any module's package, and an `independence` contract stops the packages of modules importing each other. A `forbidden` contract with `include_external_packages` can also stop `core` importing third-party libraries that reach a resource.
+[import-linter](https://import-linter.readthedocs.io/) can enforce the import rules: a `layers` contract places `infrastructure` above `core`, a `forbidden` contract stops `core.domain` importing from any module's package, and an `independence` contract stops the packages of modules importing each other. A `forbidden` contract with `include_external_packages` can also stop `core` importing any third-party library.
 
-import-linter works on files, not names, so it cannot tell an import of `OrderProcessorImpl` from an import of `OrderProcessor`. Ruff's `banned-api` setting (rule `TID251`) can: ban each constructor by its full name, `core.order_processor.OrderProcessorImpl`, and switch the rule off with `per-file-ignores` for `src/infrastructure/factories/` and `tests/`.
+import-linter works on files, not names, so it cannot tell an import of `OrderProcessorImpl` from an import of `OrderProcessor`. Ruff's `banned-api` setting (rule `TID251`) can: ban each constructor by its full name, `core.order_processor.OrderProcessorImpl`, and switch the rule off with `per-file-ignores` for `src/infrastructure/factories/modules/` and `tests/`. Ban each adapter's constructor the same way, with the rule switched off for `src/infrastructure/factories/adapters/` and `tests/`.

@@ -10,7 +10,8 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Type
 | **Export file** | the package's `index.ts`, re-exporting names |
 | **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
 | **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts` |
-| **Factory package** | `infrastructure/factories/<module-name>`, with the factories in `factory.ts` |
+| **Module factory package** | `infrastructure/factories/modules/<module-name>`, with the factories in `factory.ts` |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, with the factories in `factory.ts` |
 | **Entrypoint** | a function returned by a constructor in `infrastructure/entrypoints` — `newCli` in `infrastructure/entrypoints/cli.ts` |
 | **Startup code** | a file beside the entrypoint that calls it — `infrastructure/entrypoints/cli.start.ts` |
 
@@ -46,9 +47,18 @@ src/
           adapter.ts           # newPaypalAdapter
           http.ts              # Http, newRealHttp
     factories/
-      order-processor/
-        index.ts               # the export file
-        factory.ts             # createOrderProcessor
+      modules/
+        order-processor/
+          index.ts             # the export file
+          factory.ts           # createOrderProcessor
+      adapters/
+        order-processor/
+          stripe/
+            index.ts           # the export file
+            factory.ts         # createStripeAdapter
+          paypal/
+            index.ts           # the export file
+            factory.ts         # createPaypalAdapter
     entrypoints/
       cli.ts
       cli.start.ts
@@ -152,34 +162,61 @@ Nothing in `core` imports from `infrastructure`:
 import { newStripeAdapter } from "../../infrastructure/adapters/order-processor/stripe"; // bad: the core importing an adapter
 ```
 
-## Example 2: the factory package and an entrypoint
+## Example 2: the factory packages and an entrypoint
 
-The factory that chooses an adapter imports the adapters, so it lives in `infrastructure/factories/order-processor`, not in `core/order-processor`:
+The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
 
 ```ts
-// src/infrastructure/factories/order-processor/factory.ts
-import type { Currency } from "../../../core/domain/currency";
-import { newOrderProcessor } from "../../../core/order-processor";
-import type { OrderProcessor } from "../../../core/order-processor";
-import * as paypal from "../../adapters/order-processor/paypal";
-import * as stripe from "../../adapters/order-processor/stripe";
+// src/infrastructure/adapters/order-processor/stripe/index.ts
+export { newStripeAdapter } from "./adapter";
+export { newRealHttp } from "./http";
+export type { Http } from "./http";
+```
+
+The adapter factory builds the adapter's parts and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+
+```ts
+// src/infrastructure/factories/adapters/order-processor/stripe/factory.ts
+import type { OrderProcessorPort } from "../../../../../core/order-processor";
+import { newRealHttp, newStripeAdapter } from "../../../../adapters/order-processor/stripe";
+
+export function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory: returns the port the adapter satisfies
+  return newStripeAdapter(apiKey, newRealHttp());
+}
+```
+
+```ts
+// src/infrastructure/factories/adapters/order-processor/stripe/index.ts
+export { createStripeAdapter } from "./factory";
+```
+
+The module factory chooses an adapter by calling its adapter factory, and never imports from an adapter's package:
+
+```ts
+// src/infrastructure/factories/modules/order-processor/factory.ts
+import type { Currency } from "../../../../core/domain/currency";
+import { newOrderProcessor } from "../../../../core/order-processor";
+import type { OrderProcessor } from "../../../../core/order-processor";
+import { createPaypalAdapter } from "../../adapters/order-processor/paypal";
+import { createStripeAdapter } from "../../adapters/order-processor/stripe";
+import { newStripeAdapter } from "../../../adapters/order-processor/stripe"; // bad: a module factory reaching into an adapter's package
 
 export function createOrderProcessor(
   provider: "stripe" | "paypal",
   apiKey: string,
   currency: Currency,
-): OrderProcessor { // A factory for the order processor module
+): OrderProcessor { // A module factory for the order processor module
   switch (provider) {
     case "stripe":
-      return newOrderProcessor(stripe.newStripeAdapter(apiKey, stripe.newRealHttp()), currency);
+      return newOrderProcessor(createStripeAdapter(apiKey), currency);
     case "paypal":
-      return newOrderProcessor(paypal.newPaypalAdapter(apiKey, paypal.newRealHttp()), currency);
+      return newOrderProcessor(createPaypalAdapter(apiKey), currency);
   }
 }
 ```
 
 ```ts
-// src/infrastructure/factories/order-processor/index.ts
+// src/infrastructure/factories/modules/order-processor/index.ts
 export { createOrderProcessor } from "./factory";
 ```
 
@@ -208,7 +245,7 @@ The startup code beside it reads the environment, calls the factory and passes t
 
 ```ts
 // src/infrastructure/entrypoints/cli.start.ts
-import { createOrderProcessor } from "../factories/order-processor";
+import { createOrderProcessor } from "../factories/modules/order-processor";
 import { newCli } from "./cli";
 
 const cli = newCli(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP"));
@@ -263,18 +300,29 @@ export function newOrderProcessorAdapter(
 }
 ```
 
-The checkout factory gets an `OrderProcessor` from the order processor's factory package and passes it to the adapter:
+The adapter's factory gets an `OrderProcessor` from the order processor's module factory package and passes it to the adapter's constructor:
 
 ```ts
-// src/infrastructure/factories/checkout/factory.ts
-import { newCheckout } from "../../../core/checkout";
-import type { Checkout } from "../../../core/checkout";
-import { newOrderProcessorAdapter } from "../../adapters/checkout/order-processor";
-import { createOrderProcessor } from "../order-processor";
+// src/infrastructure/factories/adapters/checkout/order-processor/factory.ts
+import type { CheckoutPort } from "../../../../../core/checkout";
+import { newOrderProcessorAdapter } from "../../../../adapters/checkout/order-processor";
+import { createOrderProcessor } from "../../../modules/order-processor";
 
-export function createCheckout(apiKey: string): Checkout { // A factory for the checkout module
-  const orderProcessor = createOrderProcessor("stripe", apiKey, "GBP");
-  return newCheckout(newOrderProcessorAdapter(orderProcessor));
+export function createOrderProcessorAdapter(apiKey: string): CheckoutPort { // An adapter factory for the connecting adapter
+  return newOrderProcessorAdapter(createOrderProcessor("stripe", apiKey, "GBP"));
+}
+```
+
+The checkout module factory gets its adapter from that factory:
+
+```ts
+// src/infrastructure/factories/modules/checkout/factory.ts
+import { newCheckout } from "../../../../core/checkout";
+import type { Checkout } from "../../../../core/checkout";
+import { createOrderProcessorAdapter } from "../../adapters/checkout/order-processor";
+
+export function createCheckout(apiKey: string): Checkout { // A module factory for the checkout module
+  return newCheckout(createOrderProcessorAdapter(apiKey));
 }
 ```
 
@@ -338,6 +386,12 @@ src/
         legacy-billing/
           index.ts
           adapter.ts             # newLegacyBillingAdapter: satisfies OrderProcessorPort by calling billing.ts
+    factories/
+      adapters/
+        order-processor/
+          legacy-billing/
+            index.ts
+            factory.ts           # createLegacyBillingAdapter
 ```
 
 ```ts
@@ -358,10 +412,10 @@ Legacy code that needs an `OrderProcessor` calls the factory and drives the inte
 
 ```ts
 // src/views.ts, legacy code
-import { createOrderProcessor } from "./infrastructure/factories/order-processor"; // good: a factory
-import { newOrderProcessor } from "./core/order-processor";                        // bad: the constructor
+import { createOrderProcessor } from "./infrastructure/factories/modules/order-processor"; // good: a module factory
+import { newOrderProcessor } from "./core/order-processor";                                // bad: the constructor
 ```
 
 ## Checking the rules
 
-ESLint's `no-restricted-imports` can enforce the export file by banning paths that reach past a package's `index.ts`. It can also keep constructors to the factories: constructors are named `new…`, so a pattern on `src/core` with `importNamePattern: "^new"` bans importing them, and an override switches the rule off for `src/infrastructure/factories` and `tests`. [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) can enforce the import rules with `forbidden` rules: one stops `src/core` importing from `src/infrastructure`, one stops `src/core/domain` importing from any module's package, and one stops a module's package importing another module's package. A `forbidden` rule on npm dependencies can also stop `src/core` importing third-party libraries that reach a resource.
+ESLint's `no-restricted-imports` can enforce the export file by banning paths that reach past a package's `index.ts`. It can also keep constructors to the factories: constructors are named `new…`, so a pattern on `src/core` with `importNamePattern: "^new"` bans importing them, with an override switching the rule off for `src/infrastructure/factories/modules` and `tests`. The same pattern on `src/infrastructure/adapters`, switched off for `src/infrastructure/factories/adapters` and `tests`, keeps adapter constructors to their adapter factories. [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) can enforce the import rules with `forbidden` rules: one stops `src/core` importing from `src/infrastructure`, one stops `src/core/domain` importing from any module's package, and one stops a module's package importing another module's package. A `forbidden` rule on npm dependencies can also stop `src/core` importing any third-party library.

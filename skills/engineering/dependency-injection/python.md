@@ -193,19 +193,21 @@ class PostgresAdapter(OrderProcessorPort):
 
 # The factory
 
-The examples build on the `OrderProcessor` module above and two adapters for its port:
+The examples build on the `OrderProcessor` module above and two adapters for its port, each with its adapter factory:
 
 ```python
-class StripeAdapter(OrderProcessorPort):
-    def __init__(self, api_key: str, http: HTTP): ...
+# infrastructure/factories/adapters/order_processor/stripe/factory.py
+def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory: it returns the port
+    return StripeAdapter(api_key, RealHTTP()) # It builds the parts defined in the adapter's package
 
-class PaypalAdapter(OrderProcessorPort):
-    def __init__(self, api_key: str, http: HTTP): ...
+# infrastructure/factories/adapters/order_processor/paypal/factory.py
+def create_paypal_adapter(api_key: str) -> OrderProcessorPort:
+    return PaypalAdapter(api_key, RealHTTP())
 ```
 
 ## Rule 4: a factory returns the interface
 
-Bad example:
+Bad examples:
 
 ```python
 def create_order_processor(
@@ -213,6 +215,9 @@ def create_order_processor(
         api_key: str,
         currency: Currency
     ) -> OrderProcessorImpl: # This is not a factory for the OrderProcessor module as it declares the return type as the implementation of the module, not the module interface.
+    ...
+
+def create_stripe_adapter(api_key: str) -> StripeAdapter: # The adapter factory returns the adapter's implementation, not the port it satisfies.
     ...
 ```
 
@@ -223,11 +228,11 @@ def create_order_processor(
         provider: Literal["stripe", "paypal"],
         api_key: str,
         currency: Currency
-    ) -> OrderProcessor: # This is a factory for the OrderProcessor module since it declares the return type as the interface for the module.
+    ) -> OrderProcessor: # A module factory declares the module's interface as its return type.
     if provider == "stripe":
-        port = StripeAdapter(api_key, RealHTTP())
+        port = create_stripe_adapter(api_key)
     elif provider == "paypal":
-        port = PaypalAdapter(api_key, RealHTTP())
+        port = create_paypal_adapter(api_key)
     return OrderProcessorImpl(port, currency)
 ```
 
@@ -237,7 +242,7 @@ Bad example:
 
 ```python
 def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
-    order_processor = OrderProcessorImpl(StripeAdapter(api_key, RealHTTP()), currency)
+    order_processor = OrderProcessorImpl(create_stripe_adapter(api_key), currency)
 
     def with_retry(order: Order) -> Receipt: # Retrying is a behaviour, and no test adapter can reach it here.
         for _ in range(3):
@@ -250,11 +255,17 @@ def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
     return with_retry
 ```
 
-Retrying belongs behind a constructor: in `OrderProcessorImpl`, or in an adapter that wraps another adapter of the same port. The factory then only chooses and constructs:
+Retrying belongs behind a constructor: in `OrderProcessorImpl`, or in an adapter that wraps another adapter of the same port. The factories then only choose and construct:
+
+```python
+# infrastructure/factories/adapters/order_processor/retrying/factory.py
+def create_retrying_adapter(inner: OrderProcessorPort, attempts: int) -> OrderProcessorPort:
+    return RetryingAdapter(inner, attempts)
+```
 
 ```python
 def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
-    port = RetryingAdapter(StripeAdapter(api_key, RealHTTP()), attempts=3)
+    port = create_retrying_adapter(create_stripe_adapter(api_key), attempts=3)
     return OrderProcessorImpl(port, currency)
 ```
 
@@ -263,42 +274,42 @@ def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
 Bad example:
 
 ```python
-def create_order_processor() -> OrderProcessor:
-    return OrderProcessorImpl(
-        StripeAdapter(
-            api_key=os.environ["STRIPE_API_KEY"], # The factory reads the environment.
-            http=RealHTTP()
-        ),
-        currency=os.environ["CURRENCY"]
+def create_stripe_adapter() -> OrderProcessorPort:
+    return StripeAdapter(
+        api_key=os.environ["STRIPE_API_KEY"], # The factory reads the environment.
+        http=RealHTTP()
     )
 ```
 
 Good example, with the values passed in by whatever calls the factory:
 
 ```python
-def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
-    return OrderProcessorImpl(
-        StripeAdapter(
-            api_key=api_key,
-            http=RealHTTP() # Constructing reaches no resource: RealHTTP only reaches the network when called.
-        ),
-        currency=currency
+def create_stripe_adapter(api_key: str) -> OrderProcessorPort:
+    return StripeAdapter(
+        api_key=api_key,
+        http=RealHTTP() # Constructing reaches no resource: RealHTTP only reaches the network when called.
     )
+
+def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
+    return OrderProcessorImpl(create_stripe_adapter(api_key), currency)
 ```
 
 ```python
 # the program's startup code, an entrypoint or a settings loader: whichever the design chooses
 order_processor = create_order_processor(
     api_key=os.environ["STRIPE_API_KEY"],
-    currency=os.environ["CURRENCY"]
+    currency="GBP"
 )
 ```
 
-A connection is opened outside the factory too, and passed in:
+A connection is opened outside the factories too, and passed in:
 
 ```python
+def create_postgres_adapter(connection: Connection) -> OrderProcessorPort:
+    return PostgresAdapter(connection)
+
 def create_order_processor(connection: Connection, currency: Currency) -> OrderProcessor:
-    return OrderProcessorImpl(PostgresAdapter(connection), currency)
+    return OrderProcessorImpl(create_postgres_adapter(connection), currency)
 ```
 
 ## Rule 7: one constructor, many factories
@@ -307,10 +318,10 @@ Each factory is one way of supplying the single constructor:
 
 ```python
 def create_stripe_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
-    return OrderProcessorImpl(StripeAdapter(api_key, RealHTTP()), currency)
+    return OrderProcessorImpl(create_stripe_adapter(api_key), currency)
 
 def create_in_memory_order_processor(currency: Currency) -> OrderProcessor:
-    return OrderProcessorImpl(InMemoryAdapter(), currency)
+    return OrderProcessorImpl(create_in_memory_adapter(), currency)
 ```
 
 Bad example, a second way of constructing added to the implementation:
@@ -324,27 +335,36 @@ class OrderProcessorImpl:
         return cls(StripeAdapter(api_key, RealHTTP()), "GBP")
 ```
 
-## Rule 8: a factory never calls another module's constructor
+## Rule 8: a factory calls one entity's constructor, and gets everything else from factories
 
-A `Checkout` module's port is satisfied by an adapter that calls an `OrderProcessor`.
+Bad examples:
 
-Bad example:
+```python
+def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
+    port = StripeAdapter(api_key, RealHTTP()) # A module factory calls an adapter's constructor, so it must know what the adapter is made of.
+    return OrderProcessorImpl(port, currency)
+```
 
 ```python
 def create_checkout(api_key: str) -> Checkout:
-    order_processor = OrderProcessorImpl(StripeAdapter(api_key, RealHTTP()), "GBP") # Calls another module's constructor, so how an OrderProcessor is built is now known in two places.
-    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+    order_processor = OrderProcessorImpl(create_stripe_adapter(api_key), "GBP") # Calls another module's constructor, so how an OrderProcessor is built is now known in two places.
+    return CheckoutImpl(create_order_processor_adapter(order_processor))
 ```
 
 Good examples:
 
 ```python
+def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
+    return OrderProcessorImpl(create_stripe_adapter(api_key), currency) # The adapter comes from its factory
+```
+
+```python
 def create_checkout(api_key: str) -> Checkout:
     order_processor = create_stripe_order_processor(api_key, "GBP") # Another module's factory
-    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+    return CheckoutImpl(create_order_processor_adapter(order_processor))
 ```
 
 ```python
 def create_checkout(order_processor: OrderProcessor) -> Checkout: # The entity is taken as a parameter
-    return CheckoutImpl(OrderProcessorAdapter(order_processor))
+    return CheckoutImpl(create_order_processor_adapter(order_processor))
 ```

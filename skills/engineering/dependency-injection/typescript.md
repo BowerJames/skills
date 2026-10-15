@@ -194,17 +194,23 @@ function newPostgresAdapter(pool: Pool): OrderProcessorPort { // good: the pool 
 
 # The factory
 
-The examples build on the `OrderProcessor` module above and two adapters for its port:
+The examples build on the `OrderProcessor` module above and two adapters for its port, each with its adapter factory:
 
 ```ts
-function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { /* ... */ }
+// infrastructure/factories/adapters/order-processor/stripe/factory.ts
+function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory: it returns the port
+  return newStripeAdapter(apiKey, newRealHttp()); // It builds the parts defined in the adapter's package
+}
 
-function newPaypalAdapter(apiKey: string, http: Http): OrderProcessorPort { /* ... */ }
+// infrastructure/factories/adapters/order-processor/paypal/factory.ts
+function createPaypalAdapter(apiKey: string): OrderProcessorPort {
+  return newPaypalAdapter(apiKey, newRealHttp());
+}
 ```
 
 ## Rule 4: a factory returns the interface
 
-Bad example:
+Bad examples:
 
 ```ts
 function createOrderProcessor(
@@ -212,6 +218,10 @@ function createOrderProcessor(
   apiKey: string,
   currency: Currency,
 ) { // This is not a factory for the OrderProcessor module: with no declared return type, callers get whatever type the constructor happens to return, not a promise of the module interface.
+  /* ... */
+}
+
+function createStripeAdapter(apiKey: string) { // The adapter factory declares no return type, so callers see the adapter's own shape, not the port it satisfies.
   /* ... */
 }
 ```
@@ -223,12 +233,12 @@ function createOrderProcessor(
   provider: "stripe" | "paypal",
   apiKey: string,
   currency: Currency,
-): OrderProcessor { // This is a factory for the OrderProcessor module since it declares the return type as the interface for the module.
+): OrderProcessor { // A module factory declares the module's interface as its return type.
   switch (provider) {
     case "stripe":
-      return newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), currency);
+      return newOrderProcessor(createStripeAdapter(apiKey), currency);
     case "paypal":
-      return newOrderProcessor(newPaypalAdapter(apiKey, newRealHttp()), currency);
+      return newOrderProcessor(createPaypalAdapter(apiKey), currency);
   }
 }
 ```
@@ -239,7 +249,7 @@ Bad example:
 
 ```ts
 function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
-  const orderProcessor = newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), currency);
+  const orderProcessor = newOrderProcessor(createStripeAdapter(apiKey), currency);
 
   return function withRetry(order) { // Retrying is a behaviour, and no test adapter can reach it here.
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -254,11 +264,18 @@ function createOrderProcessor(apiKey: string, currency: Currency): OrderProcesso
 }
 ```
 
-Retrying belongs behind a constructor: in the implementation of the module, or in an adapter that wraps another adapter of the same port. The factory then only chooses and constructs:
+Retrying belongs behind a constructor: in the implementation of the module, or in an adapter that wraps another adapter of the same port. The factories then only choose and construct:
+
+```ts
+// infrastructure/factories/adapters/order-processor/retrying/factory.ts
+function createRetryingAdapter(inner: OrderProcessorPort, attempts: number): OrderProcessorPort {
+  return newRetryingAdapter(inner, attempts);
+}
+```
 
 ```ts
 function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
-  const port = newRetryingAdapter(newStripeAdapter(apiKey, newRealHttp()), 3);
+  const port = createRetryingAdapter(createStripeAdapter(apiKey), 3);
   return newOrderProcessor(port, currency);
 }
 ```
@@ -268,13 +285,10 @@ function createOrderProcessor(apiKey: string, currency: Currency): OrderProcesso
 Bad example:
 
 ```ts
-function createOrderProcessor(): OrderProcessor {
-  return newOrderProcessor(
-    newStripeAdapter(
-      process.env.STRIPE_API_KEY!, // The factory reads the environment.
-      newRealHttp(),
-    ),
-    process.env.CURRENCY as Currency,
+function createStripeAdapter(): OrderProcessorPort {
+  return newStripeAdapter(
+    process.env.STRIPE_API_KEY!, // The factory reads the environment.
+    newRealHttp(),
   );
 }
 ```
@@ -282,30 +296,32 @@ function createOrderProcessor(): OrderProcessor {
 Good example, with the values passed in by whatever calls the factory:
 
 ```ts
-function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
-  return newOrderProcessor(
-    newStripeAdapter(
-      apiKey,
-      newRealHttp(), // Constructing reaches no resource: the http function only reaches the network when called.
-    ),
-    currency,
+function createStripeAdapter(apiKey: string): OrderProcessorPort {
+  return newStripeAdapter(
+    apiKey,
+    newRealHttp(), // Constructing reaches no resource: the http function only reaches the network when called.
   );
+}
+
+function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
+  return newOrderProcessor(createStripeAdapter(apiKey), currency);
 }
 ```
 
 ```ts
 // the program's startup code, an entrypoint or a settings loader: whichever the design chooses
-const orderProcessor = createOrderProcessor(
-  process.env.STRIPE_API_KEY!,
-  process.env.CURRENCY as Currency,
-);
+const orderProcessor = createOrderProcessor(process.env.STRIPE_API_KEY!, "GBP");
 ```
 
-A connection is opened outside the factory too, and passed in:
+A connection is opened outside the factories too, and passed in:
 
 ```ts
+function createPostgresAdapter(pool: Pool): OrderProcessorPort {
+  return newPostgresAdapter(pool);
+}
+
 function createOrderProcessor(pool: Pool, currency: Currency): OrderProcessor {
-  return newOrderProcessor(newPostgresAdapter(pool), currency);
+  return newOrderProcessor(createPostgresAdapter(pool), currency);
 }
 ```
 
@@ -315,11 +331,11 @@ Each factory is one way of supplying the single constructor:
 
 ```ts
 function createStripeOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
-  return newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), currency);
+  return newOrderProcessor(createStripeAdapter(apiKey), currency);
 }
 
 function createInMemoryOrderProcessor(currency: Currency): OrderProcessor {
-  return newOrderProcessor(newInMemoryAdapter(), currency);
+  return newOrderProcessor(createInMemoryAdapter(), currency);
 }
 ```
 
@@ -334,30 +350,41 @@ export function newStripeOrderProcessor(apiKey: string): OrderProcessor { // A s
 }
 ```
 
-## Rule 8: a factory never calls another module's constructor
+## Rule 8: a factory calls one entity's constructor, and gets everything else from factories
 
-A `Checkout` module's port is satisfied by an adapter that calls an `OrderProcessor`.
+Bad examples:
 
-Bad example:
+```ts
+function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
+  const port = newStripeAdapter(apiKey, newRealHttp()); // A module factory calls an adapter's constructor, so it must know what the adapter is made of.
+  return newOrderProcessor(port, currency);
+}
+```
 
 ```ts
 function createCheckout(apiKey: string): Checkout {
-  const orderProcessor = newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), "GBP"); // Calls another module's constructor, so how an OrderProcessor is built is now known in two places.
-  return newCheckout(newOrderProcessorAdapter(orderProcessor));
+  const orderProcessor = newOrderProcessor(createStripeAdapter(apiKey), "GBP"); // Calls another module's constructor, so how an OrderProcessor is built is now known in two places.
+  return newCheckout(createOrderProcessorAdapter(orderProcessor));
 }
 ```
 
 Good examples:
 
 ```ts
+function createOrderProcessor(apiKey: string, currency: Currency): OrderProcessor {
+  return newOrderProcessor(createStripeAdapter(apiKey), currency); // The adapter comes from its factory
+}
+```
+
+```ts
 function createCheckout(apiKey: string): Checkout {
   const orderProcessor = createStripeOrderProcessor(apiKey, "GBP"); // Another module's factory
-  return newCheckout(newOrderProcessorAdapter(orderProcessor));
+  return newCheckout(createOrderProcessorAdapter(orderProcessor));
 }
 ```
 
 ```ts
 function createCheckout(orderProcessor: OrderProcessor): Checkout { // The entity is taken as a parameter
-  return newCheckout(newOrderProcessorAdapter(orderProcessor));
+  return newCheckout(createOrderProcessorAdapter(orderProcessor));
 }
 ```

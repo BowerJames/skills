@@ -69,16 +69,24 @@ function newPaypalAdapter(apiKey: string, http: Http): OrderProcessorPort { // C
   };
 }
 
+function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the stripe adapter
+  return newStripeAdapter(apiKey, newRealHttp());
+}
+
+function createPaypalAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the paypal adapter
+  return newPaypalAdapter(apiKey, newRealHttp());
+}
+
 function createOrderProcessor(
   provider: "stripe" | "paypal",
   apiKey: string,
   currency: Currency,
-): OrderProcessor { // A factory for the order processor module
+): OrderProcessor { // A module factory for the order processor module
   switch (provider) {
     case "stripe":
-      return newOrderProcessor(newStripeAdapter(apiKey, newRealHttp()), currency);
+      return newOrderProcessor(createStripeAdapter(apiKey), currency);
     case "paypal":
-      return newOrderProcessor(newPaypalAdapter(apiKey, newRealHttp()), currency);
+      return newOrderProcessor(createPaypalAdapter(apiKey), currency);
   }
 }
 ```
