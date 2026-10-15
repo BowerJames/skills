@@ -462,7 +462,7 @@ tests/
           postgres/
             test_postgres.py       # runs PostgresAdapter against a real database
   e2e/
-    test_cli.py                    # where the project has end-to-end tests: runs the startup code
+    test_main.py                   # where the project has end-to-end tests: runs infrastructure/startup/main.py
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:

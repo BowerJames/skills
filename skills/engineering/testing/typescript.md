@@ -167,7 +167,7 @@ test("saves and loads an order", () => { // runs against the real resource
 ```
 
 ```ts
-// tests/e2e/cli.test.ts
+// tests/e2e/main.test.ts
 test("cli processes an order", () => { // optional: runs the startup code with the production factories
   const output = execFileSync("tsx", ["src/infrastructure/startup/main.ts", "order_id", "100"], { encoding: "utf8" });
   expect(output).toContain("total=100");

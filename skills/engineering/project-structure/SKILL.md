@@ -67,7 +67,7 @@ _Avoid_: container, composition root, bootstrap.
 
 **Module factory package** — the `infrastructure/factories/modules/<module_name>` package, holding the module factories of one module: the code that gets adapters from their factories and passes them to the module's constructor.
 
-**Adapter factory package** — the `infrastructure/factories/adapters/<module_name>/<adapter_name>` package, holding the adapter factories of one adapter: the code that builds the adapter's parts and passes them to the adapter's constructor.
+**Adapter factory package** — the `infrastructure/factories/adapters/<module_name>/<adapter_name>` package, or `<entrypoint_name>/<adapter_name>` for a driving adapter, holding the adapter factories of one adapter: the code that builds the adapter's parts and passes them to the adapter's constructor.
 
 _Avoid_: container, composition root, bootstrap.
 
@@ -123,7 +123,7 @@ This improves **flexibility for designers** since the port file shows everything
 
 A driven adapter's package is `infrastructure/adapters/<module_name>/<adapter_name>`, where `<module_name>` matches the package in the core that defines the port. A driving adapter's package is `infrastructure/adapters/<entrypoint_name>/<adapter_name>`, where `<entrypoint_name>` names the entrypoint whose port it satisfies; rule 6 covers what it does.
 
-An adapter satisfies the whole port. It is placed by its role, not by what it reaches: an entity defined to satisfy a module's port lives here whether or not it reaches a resource. It is named for what sets it apart from the other adapters of that port: the resource it reaches (`stripe`, `paypal`, `postgres`), or what it does instead (`in_memory`, `flat_rate`, `retrying`).
+An adapter satisfies the whole port. It is placed by its role, not by what it reaches: an entity defined to satisfy a module's port lives here whether or not it reaches a resource. A driven adapter is named for what sets it apart from the other adapters of that port: the resource it reaches (`stripe`, `paypal`, `postgres`), or what it does instead (`in_memory`, `flat_rate`, `retrying`). A driving adapter is named for the input it handles: `cli`, `orders_router`.
 
 An adapter that connects one module to another is named for the module it calls: `infrastructure/adapters/checkout/order_processor`. It translates between the data carriers of the two modules.
 

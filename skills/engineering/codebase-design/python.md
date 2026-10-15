@@ -16,6 +16,8 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
 | **Error** | an `Exception` subclass |
 
+A constructor and a factory are told apart by name. A class's constructor is the class itself (`OrderProcessorImpl`). A function constructor is named for what it returns (`call_router`). A factory is `create_…` (`create_order_processor`).
+
 ## Module
 
 Below illustrates an example of an `OrderProcessor` module in Python.

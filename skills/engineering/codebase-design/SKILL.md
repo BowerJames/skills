@@ -36,7 +36,7 @@ _Avoid_: unit, component, service.
 
 **Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from a port, which is an interface, not a value.
 
-**Adapter** — An entity defined to satisfy a port. A **driven adapter** satisfies a module's port: the module calls it. A **driving adapter** satisfies an entrypoint's port: the entrypoint calls it, and it drives modules through their interfaces.
+**Adapter** — An entity defined to satisfy a port. A **driven adapter** satisfies a module's port: the module calls it. A **driving adapter** satisfies an entrypoint's port: the entrypoint calls it, and it drives the modules it needs through their interfaces.
 
 **Entrypoint** — what receives input from outside the program and calls into it: a web framework, a CLI runner, a queue consumer, a scheduler, or the process's `main` where there is no framework. The project does not write it; it configures it and starts it. Its port is the shape of what it calls: a route, a command, a message callback. Driving adapters satisfy it.
 
@@ -111,9 +111,9 @@ Good entities make testing natural:
 - **Capability** is a property of an **Entity**, measured against its **Interface**.
 - An entity can have many **Factories** but only one **Constructor**.
 - An **Adapter**'s interface must satisfy a **Port**, and it satisfies the whole port.
-- Every **Adapter** satisfies the port of a **Module** (a driven adapter) or of an **Entrypoint** (a driving adapter).
+- Every **Adapter** in the program satisfies the port of a **Module** (a driven adapter) or of an **Entrypoint** (a driving adapter). A test adapter is the exception: it satisfies whichever port of the entity under test a test needs, an adapter's own ports included.
 - A **Port** belongs to the entity that defines it. A module has at most one. Any other entity can have its own: whatever an adapter's constructor takes as an interface is a port of it. An entrypoint's port is defined by the framework or runtime that is the entrypoint.
-- What satisfies an adapter's own ports is not an adapter in its own right: a part defined in the adapter's package, an object the entrypoint hands it (a request, a socket), or an entity or factory passed to its constructor. The exception is an adapter wrapping another adapter of the same port, such as `retrying`: the inner one satisfies the same port.
+- In the program, what satisfies an adapter's own ports is not an adapter in its own right: a part defined in the adapter's package, an object the entrypoint hands it (a request, a socket), or an entity or factory passed to its constructor. The exception is an adapter wrapping another adapter of the same port, such as `retrying`: the inner one satisfies the same port.
 - An **Adapter** is told apart from a **Module** by its role, not its shape: it exists to satisfy a port.
 
 ## Rejected framings

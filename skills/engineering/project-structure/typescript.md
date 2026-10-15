@@ -417,7 +417,7 @@ tests/
           postgres/
             postgres.test.ts       # runs the postgres adapter against a real database
   e2e/
-    cli.test.ts                    # where the project has end-to-end tests: runs the startup code
+    main.test.ts                   # where the project has end-to-end tests: runs infrastructure/startup/main.ts
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:
