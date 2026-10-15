@@ -43,11 +43,11 @@ src/
         stripe/
           index.ts             # the export file
           adapter.ts           # newStripeAdapter
-          http.ts              # Http, newRealHttp: the adapter's own port and what satisfies it
+          fetch.ts             # SyncFetch: its view of the sync-fetch library's function
         paypal/
           index.ts             # the export file
           adapter.ts           # newPaypalAdapter
-          http.ts              # Http, newRealHttp
+          fetch.ts             # SyncFetch
       main/                    # the driving adapters of Node running a file
         cli/
           index.ts             # the export file
@@ -155,9 +155,9 @@ An adapter imports the port from the module's export file:
 import type { OrderProcessorPort } from "../../../../core/order-processor";      // good: the export file
 import type { OrderProcessorPort } from "../../../../core/order-processor/port"; // bad: reaches behind the export file
 import { newPaypalAdapter } from "../paypal";                                    // bad: an adapter importing another adapter
-import type { Http } from "./http";                                              // good: the adapter's own port, defined in its own package
+import type { SyncFetch } from "./fetch";                                        // good: its view of the library, declared in its own package
 
-export function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the stripe adapter
+export function newStripeAdapter(apiKey: string, fetch: SyncFetch): OrderProcessorPort { // Constructor: takes the library's function
   return { // Adapter for the module's port
     charge(amount, currency) { /* ... */ },
   };
@@ -173,24 +173,24 @@ import { newStripeAdapter } from "../../infrastructure/adapters/order-processor/
 
 ## Example 2: the factory packages, a driving adapter and its startup code
 
-The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
+The adapter's export file exports its constructor and its view, which is what its adapter factory and its tests need:
 
 ```ts
 // src/infrastructure/adapters/order-processor/stripe/index.ts
 export { newStripeAdapter } from "./adapter";
-export { newRealHttp } from "./http";
-export type { Http } from "./http";
+export type { SyncFetch } from "./fetch";
 ```
 
-The adapter factory builds the adapter's parts and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+The adapter factory passes the library objects the adapter takes and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
 
 ```ts
 // src/infrastructure/factories/adapters/order-processor/stripe/factory.ts
+import syncFetch from "sync-fetch";
 import type { OrderProcessorPort } from "../../../../../core/order-processor";
-import { newRealHttp, newStripeAdapter } from "../../../../adapters/order-processor/stripe";
+import { newStripeAdapter } from "../../../../adapters/order-processor/stripe";
 
 export function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory: returns the port the adapter satisfies
-  return newStripeAdapter(apiKey, newRealHttp());
+  return newStripeAdapter(apiKey, syncFetch); // The library's function satisfies the view by shape
 }
 ```
 
@@ -286,7 +286,7 @@ app.register(createOrdersRoutes(createOrderProcessor("stripe", process.env.STRIP
 await app.listen({ port: 3000 });
 ```
 
-When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
 
 ```ts
 // src/infrastructure/adapters/fastify/call-routes/adapter.ts
@@ -294,7 +294,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { WebSocket } from "ws";
 import type { CallDetails, PhoneCall } from "../../../../core/phone-call";
 
-export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // The driving adapter's own port: opening the entity per request
+export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // Opens the entity per request: a function returning the module's interface
 
 export function newCallRoutes(path: string, openCall: OpenPhoneCall): FastifyPluginAsync { // Its constructor: returns the plugin Fastify calls
   return async (app) => {
@@ -401,8 +401,8 @@ tests/
       adapters/
         order-processor/
           stripe/
-            stripe.test.ts         # constructs with newStripeAdapter and a fake http
-            adapters.ts            # newFakeHttp
+            stripe.test.ts         # constructs with newStripeAdapter and a fake of its view
+            adapters.ts            # newFakeFetch: the test adapter for the view
         checkout/
           order-processor/
             order-processor.test.ts  # constructs with newOrderProcessorAdapter and a fake order processor

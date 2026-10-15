@@ -26,7 +26,9 @@ A module's constructor takes at most one parameter that carries behaviour: the m
 
 Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier, never an object from a library: a module is self-contained, so what a library provides reaches it through its port.
 
-An adapter's constructor is not limited to the module's port: it can take ports of its own, satisfied by other entities, or anything else it needs. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An adapter's constructor takes interfaces of the four kinds (a module's port or interface, a domain interface, an entrypoint's port), configuration, and, at the edge where it reaches a resource, the library's own object, or a view of it where the library offers no test hook. It defines no port of its own: anything with behaviour behind it that the adapter needs is a module or a domain interface, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
+
+When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
 
 This improves **flexibility for designers** since a new adapter adds a capability without touching the module.
 
@@ -57,7 +59,7 @@ This improves **testability for everyone** since constructing any entity is safe
 A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. There are two kinds:
 
 - **A module factory** builds a module: it gets an adapter for the module's port and calls the module's constructor.
-- **An adapter factory** builds an adapter: it builds the parts the adapter's constructor takes and calls the adapter's constructor. Every adapter with a package of its own has one, even an adapter with nothing to build but itself; a part of an adapter is built by that adapter's factory.
+- **An adapter factory** builds an adapter: it builds the library objects the adapter's constructor takes, gets every other entity from that entity's factory, and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
 
 ### 4. A factory returns the interface
 
@@ -91,7 +93,7 @@ This improves **flexibility for designers** since a new combination of adapters 
 
 ### 8. A factory calls one entity's constructor, and gets everything else from factories
 
-A factory calls the constructor of the entity it builds and, for an adapter, the constructors of the parts defined in the adapter's package. Every other entity it needs comes from that entity's factory or as a parameter.
+A factory calls the constructor of the entity it builds and, for an adapter, builds the library objects the adapter takes. Every other entity it needs comes from that entity's factory or as a parameter.
 
 - A module factory never calls an adapter's constructor. It calls the adapter's factory.
 - A factory never calls another module's constructor. It calls one of that module's factories, or takes the entity as a parameter.

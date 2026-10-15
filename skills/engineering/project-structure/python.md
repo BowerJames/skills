@@ -43,12 +43,10 @@ src/
       order_processor/
         stripe/
           __init__.py          # the export file
-          adapter.py           # StripeAdapter
-          http.py              # HTTP, RealHTTP: the adapter's own port and what satisfies it
+          adapter.py           # StripeAdapter: takes an httpx.Client
         paypal/
           __init__.py          # the export file
-          adapter.py           # PaypalAdapter
-          http.py              # HTTP, RealHTTP
+          adapter.py           # PaypalAdapter: takes an httpx.Client
       main/                    # the driving adapters of Python's __main__
         cli/
           __init__.py          # the export file
@@ -182,10 +180,10 @@ from core.order_processor import OrderProcessorPort                # good: the e
 from core.order_processor.port import OrderProcessorPort           # bad: reaches behind the export file
 from infrastructure.adapters.order_processor.paypal import ...     # bad: an adapter importing another adapter
 
-from .http import HTTP                                             # good: the adapter's own port, defined in its own package
+import httpx                                                       # good: the library whose client it takes
 
 class StripeAdapter(OrderProcessorPort): # Adapter for the module's port
-    def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
+    def __init__(self, api_key: str, http: httpx.Client): ... # Constructor: takes the library's own client
 
     def charge(self, amount: int, currency: Currency) -> bool: ...
 ```
@@ -199,25 +197,26 @@ from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad
 
 ## Example 2: the factory packages, a driving adapter and its startup code
 
-The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
+The adapter's export file exports its constructor, which is what its adapter factory needs:
 
 ```python
 # infrastructure/adapters/order_processor/stripe/__init__.py
 from .adapter import StripeAdapter
-from .http import HTTP, RealHTTP
 
-__all__ = ["HTTP", "RealHTTP", "StripeAdapter"]
+__all__ = ["StripeAdapter"]
 ```
 
-The adapter factory builds the adapter's parts and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+The adapter factory builds the library objects the adapter takes and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
 
 ```python
 # infrastructure/factories/adapters/order_processor/stripe/factory.py
+import httpx
+
 from core.order_processor import OrderProcessorPort
-from infrastructure.adapters.order_processor.stripe import RealHTTP, StripeAdapter
+from infrastructure.adapters.order_processor.stripe import StripeAdapter
 
 def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory: returns the port the adapter satisfies
-    return StripeAdapter(api_key, RealHTTP())
+    return StripeAdapter(api_key, httpx.Client()) # Building the client reaches no resource: it connects when called
 ```
 
 ```python
@@ -330,7 +329,7 @@ app.include_router(
 )
 ```
 
-When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
 
 ```python
 # infrastructure/adapters/fastapi/call_router/router.py
@@ -340,7 +339,7 @@ from fastapi import APIRouter, WebSocket
 
 from core.phone_call import CallDetails, PhoneCall
 
-type OpenPhoneCall = Callable[[WebSocket, CallDetails], PhoneCall] # The driving adapter's own port: opening the entity per request
+type OpenPhoneCall = Callable[[WebSocket, CallDetails], PhoneCall] # Opens the entity per request: a function returning the module's interface
 
 def call_router(*, path: str, open_call: OpenPhoneCall) -> APIRouter: # Its constructor: returns the APIRouter FastAPI calls
     router = APIRouter()
@@ -446,8 +445,7 @@ tests/
       adapters/
         order_processor/
           stripe/
-            test_stripe.py         # constructs StripeAdapter with FakeHTTP
-            adapters.py            # FakeHTTP
+            test_stripe.py         # constructs StripeAdapter with an httpx.Client on httpx.MockTransport
         checkout/
           order_processor/
             test_order_processor.py  # constructs OrderProcessorAdapter with FakeOrderProcessor
