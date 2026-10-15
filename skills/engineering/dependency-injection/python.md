@@ -295,7 +295,7 @@ def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
 ```
 
 ```python
-# the program's startup code, an entrypoint or a settings loader: whichever the design chooses
+# the program's startup code or a settings loader: whichever the design chooses
 order_processor = create_order_processor(
     api_key=os.environ["STRIPE_API_KEY"],
     currency="GBP"

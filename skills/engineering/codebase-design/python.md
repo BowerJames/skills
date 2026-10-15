@@ -9,9 +9,14 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 | **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[Order], Receipt]` |
 | **Port** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
 | **Adapter** | a class or function satisfying the port's shape |
+| **Driven adapter** | an adapter satisfying a module's port — `StripeAdapter` for `OrderProcessorPort` |
+| **Driving adapter** | an adapter satisfying the shape its entrypoint calls — a FastAPI `APIRouter`, a command `Callable[[list[str]], None]` |
+| **Entrypoint** | the framework or runtime that calls the program, never written in it — FastAPI, Click, Celery, or Python running a file as `__main__` |
 | **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the port and returns it |
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
 | **Error** | an `Exception` subclass |
+
+A constructor and a factory are told apart by name. A class's constructor is the class itself (`OrderProcessorImpl`). A function constructor is named for what it returns (`call_router`). A factory is `create_…` (`create_order_processor`).
 
 ## Module
 

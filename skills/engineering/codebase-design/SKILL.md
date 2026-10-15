@@ -28,7 +28,7 @@ _Avoid_: API, signature (too narrow — they refer only to the type-level surfac
 
 **Constructor** — the one function that creates an entity. It takes everything required to measure the entity's behaviours, and it reaches no resource.
 
-**Port** — An interface defined by an entity that must be provided to its constructor. A module defines at most one port, and that port holds everything the module needs from outside itself.
+**Port** — An interface an entity defines for what it needs from outside itself: passed to its constructor or, for an entrypoint, registered with it. A module defines at most one port, and that port holds everything the module needs from outside itself.
 
 **Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. It is self-contained: it depends only on the data carriers of the domain package and on its own port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
 
@@ -36,7 +36,13 @@ _Avoid_: unit, component, service.
 
 **Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from a port, which is an interface, not a value.
 
-**Adapter** — An entity defined to satisfy a port.
+**Adapter** — An entity defined to satisfy a port. A **driven adapter** satisfies a module's port: the module calls it. A **driving adapter** satisfies an entrypoint's port: the entrypoint calls it, and it drives the modules it needs through their interfaces.
+
+**Entrypoint** — what receives input from outside the program and calls into it: a web framework, a CLI runner, a queue consumer, a scheduler, or the process's `main` where there is no framework. The project does not write it; it configures it and starts it. Its port is the shape of what it calls: a route, a command, a message callback. Driving adapters satisfy it.
+
+A library the program calls is not an entrypoint, even though the project did not define its interface: an HTTP client, a database driver, the environment, the clock. It is how an adapter reaches a resource. What tells them apart is the direction of the call, not who defined the interface.
+
+_Avoid_: controller (names the project's code, not the framework that calls it), entry point.
 
 **Behaviour** — Something measurable and verifiable by a test through an entity's interface and constructor.
 
@@ -105,12 +111,16 @@ Good entities make testing natural:
 - **Capability** is a property of an **Entity**, measured against its **Interface**.
 - An entity can have many **Factories** but only one **Constructor**.
 - An **Adapter**'s interface must satisfy a **Port**, and it satisfies the whole port.
-- A **Port** belongs to the entity that defines it. A module has at most one. Any other entity can have its own: whatever an adapter's or an entrypoint's constructor takes as an interface is a port of it.
+- Every **Adapter** in the program satisfies the port of a **Module** (a driven adapter) or of an **Entrypoint** (a driving adapter). A test adapter is the exception: it satisfies whichever port of the entity under test a test needs, an adapter's own ports included.
+- A **Port** belongs to the entity that defines it. A module has at most one. Any other entity can have its own: whatever an adapter's constructor takes as an interface is a port of it. An entrypoint's port is defined by the framework or runtime that is the entrypoint.
+- In the program, what satisfies an adapter's own ports is not an adapter in its own right: a part defined in the adapter's package, an object the entrypoint hands it (a request, a socket), or an entity or factory passed to its constructor. The exception is an adapter wrapping another adapter of the same port, such as `retrying`: the inner one satisfies the same port.
 - An **Adapter** is told apart from a **Module** by its role, not its shape: it exists to satisfy a port.
 
 ## Rejected framings
 
 - **Capability as a ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We measure capability against the interface instead: the range of capability per unit of interface a caller has to learn.
+- **The entrypoint as code the project writes, satisfying no port**: it hides the framework that calls the project's code. A route handler has the shape the framework dictates, which is satisfying a port; calling it anything else leaves its role unnamed. The framework is the entrypoint, and the handler is a driving adapter.
+- **The entrypoint as anything whose interface the project did not define**: it would make every library an entrypoint. An HTTP client or a database driver is called by the project, not the other way round, so it is how an adapter reaches a resource.
 
 ## Language idioms
 

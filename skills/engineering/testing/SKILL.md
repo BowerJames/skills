@@ -29,7 +29,7 @@ _Avoid_: test framework (too restrictive, doesn't cover the helper functions and
 
 _Avoid_: contract test, and integration test as a name for any test that covers more than one entity.
 
-**End-to-end test** — a test that runs an entrypoint's startup code with the production factories, to show that the entities are wired together correctly. Optional: a project has them only when it wants that check.
+**End-to-end test** — a test that runs the startup code with the production factories, to show that the entities are wired together correctly. Optional: a project has them only when it wants that check.
 
 _Avoid_: acceptance test, system test, smoke test.
 
@@ -55,7 +55,8 @@ A test never works against internals: pick the **Entity under test**, call its c
 ## Testing the infrastructure
 
 - **Adapters.** An adapter is an entity under test like any other: its interface is the port it satisfies, and it is constructed with test adapters for whatever its own constructor takes. Where that measures the behaviour, the test is a **unit test**. Where the behaviour can only be measured against the real resource — a query that only the database can judge — it is an **integration test**.
-- **Entrypoints.** An entrypoint's translation between the outside world and data carriers is behaviour. Its constructor takes the interfaces it drives, so it is unit tested with a test adapter for each.
+- **Driving adapters.** A driving adapter's translation between its entrypoint's input and data carriers is behaviour. Its constructor takes the interfaces it drives, so it is unit tested with a test adapter for each. Where the entrypoint provides a test client that reaches no resource, such as a web framework's, the test may drive the adapter through it: that is how the entrypoint calls it.
+- **Entrypoints.** The entrypoint is a framework or runtime, not the project's code, so it has no tests of its own.
 - **Factories and startup code.** They hold no behaviour, so they have no unit tests. Only an end-to-end test exercises them.
 
 ## Data carriers
@@ -81,5 +82,5 @@ Each is a good-test criterion violated:
 
 The sections above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — pytest as the harness, a fake as the test adapter, a helper wrapping the constructor, unit tests of an error, an adapter and an entrypoint, markers for integration and end-to-end tests, both anti-patterns
-- [typescript.md](typescript.md) — vitest as the harness, a fake as the test adapter, a helper wrapping the constructor, unit tests of an error, an adapter and an entrypoint, directories for integration and end-to-end tests, both anti-patterns
+- [python.md](python.md) — pytest as the harness, a fake as the test adapter, a helper wrapping the constructor, unit tests of an error, an adapter and a driving adapter, markers for integration and end-to-end tests, both anti-patterns
+- [typescript.md](typescript.md) — vitest as the harness, a fake as the test adapter, a helper wrapping the constructor, unit tests of an error, an adapter and a driving adapter, directories for integration and end-to-end tests, both anti-patterns

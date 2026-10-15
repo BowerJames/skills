@@ -111,10 +111,10 @@ def test_charge_answers_false_when_the_card_is_declined():
     assert stripe.charge(1250, "GBP") is False
 ```
 
-An entrypoint's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
+A driving adapter's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
 
 ```python
-class FakeOrderProcessor:                        # a test adapter for the entrypoint's port: the OrderProcessor interface
+class FakeOrderProcessor:                        # a test adapter for the driving adapter's own port: the OrderProcessor interface
     def __init__(self) -> None:
         self.orders: list[Order] = []
 
@@ -129,6 +129,17 @@ def test_cli_reads_each_cost_into_an_order_item():
     assert [item.cost for item in order_processor.orders[0].items] == [100, 40]
 ```
 
+Where the entrypoint provides a test client that reaches no resource, the test may drive the adapter through it, as the entrypoint calls it. The adapter is still built by its constructor with test adapters, never by its factory:
+
+```python
+def test_the_orders_route_reads_each_cost_into_an_order_item():
+    order_processor = FakeOrderProcessor()
+    app = FastAPI()
+    app.include_router(orders_router(order_processor))   # the driving adapter's constructor, given a test adapter
+    TestClient(app).post("/orders", json={"id": "order_id", "costs": [100, 40]})
+    assert [item.cost for item in order_processor.orders[0].items] == [100, 40]
+```
+
 Integration tests and end-to-end tests are kept apart from the unit tests with markers, so the default run needs no environment:
 
 ```python
@@ -140,7 +151,7 @@ def test_saves_and_loads_an_order(connection):
 
 @pytest.mark.e2e                                 # optional: runs the startup code with the production factories
 def test_cli_processes_an_order():
-    result = subprocess.run(["python", "-m", "infrastructure.entrypoints.cli", "order_id", "100"], capture_output=True, text=True)
+    result = subprocess.run(["python", "-m", "infrastructure.startup.main", "order_id", "100"], capture_output=True, text=True)
     assert "total=100" in result.stdout
 ```
 

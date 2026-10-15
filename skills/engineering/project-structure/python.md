@@ -11,9 +11,10 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
 | **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py` |
 | **Module factory package** | `infrastructure/factories/modules/<module_name>`, with the factories in `factory.py` |
-| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, with the factories in `factory.py` |
-| **Entrypoint** | a class in a file in `infrastructure/entrypoints` — `Cli` in `infrastructure/entrypoints/cli.py` |
-| **Startup code** | the `if __name__ == "__main__":` block in the entrypoint's file |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter, with the factories in `factory.py` |
+| **Entrypoint** | the framework or runtime that calls the program, never written in it: FastAPI, Click, Celery, or Python running a file as `__main__`, named `main` |
+| **Driving adapter** | a class in `infrastructure/adapters/<entrypoint_name>/<adapter_name>` — `Cli` in `infrastructure/adapters/main/cli/adapter.py` |
+| **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.py` with its `if __name__ == "__main__":` block |
 
 Python calls every `.py` file a "module". In these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.py` file.
 
@@ -47,6 +48,10 @@ src/
           __init__.py          # the export file
           adapter.py           # PaypalAdapter
           http.py              # HTTP, RealHTTP
+      main/                    # the driving adapters of Python's __main__
+        cli/
+          __init__.py          # the export file
+          adapter.py           # Cli
     factories/
       modules/
         order_processor/
@@ -60,8 +65,12 @@ src/
           paypal/
             __init__.py        # the export file
             factory.py         # create_paypal_adapter
-    entrypoints/
-      cli.py
+        main/
+          cli/
+            __init__.py        # the export file
+            factory.py         # create_cli
+    startup/
+      main.py                  # the startup code for Python's __main__
 ```
 
 `Currency` means the same thing to every module and belongs to none, so it is in the domain package. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the module's data file:
@@ -187,7 +196,7 @@ Nothing in `core` imports from `infrastructure`:
 from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad: the core importing an adapter
 ```
 
-## Example 2: the factory packages and an entrypoint
+## Example 2: the factory packages, a driving adapter and its startup code
 
 The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
 
@@ -248,30 +257,50 @@ from .factory import create_order_processor
 __all__ = ["create_order_processor"]
 ```
 
-The entrypoint's constructor takes the entity it drives, and the entrypoint translates between the outside world and data carriers. The startup code beside it reads the environment, calls the factory and passes the entity to the entrypoint's constructor:
+The entrypoint here is Python itself, running the startup file as `__main__`; the project does not write it. What it reaches is a driving adapter: `Cli` has the shape of a command, a callable given the command-line arguments. Its constructor takes the module interface it drives, and it translates between the arguments and data carriers:
 
 ```python
-# infrastructure/entrypoints/cli.py
-import os
-import sys
-
+# infrastructure/adapters/main/cli/adapter.py
 from core.order_processor import Order, OrderItem, OrderProcessor
-from infrastructure.factories.modules.order_processor import create_order_processor
 
-class Cli: # The entrypoint: calls no module's constructor and no factory, imports no adapter
+class Cli: # A driving adapter: calls no module's constructor and no factory, imports no other adapter
     def __init__(self, order_processor: OrderProcessor): # Its constructor takes the interface it drives
         self.order_processor = order_processor
 
-    def __call__(self, argv: list[str]) -> None:
+    def __call__(self, argv: list[str]) -> None: # The shape the entrypoint calls: a command
         order = Order(
             id=argv[0],
             items=tuple(OrderItem(name=f"item_{i}", cost=int(cost)) for i, cost in enumerate(argv[1:]))
         ) # translate the outside world into a data carrier
         receipt = self.order_processor(order)
         print(f"total={receipt.total} {receipt.currency}")
+```
 
-if __name__ == "__main__": # The startup code
-    cli = Cli(
+Like every adapter, it has an adapter factory:
+
+```python
+# infrastructure/factories/adapters/main/cli/factory.py
+from collections.abc import Callable
+
+from core.order_processor import OrderProcessor
+from infrastructure.adapters.main.cli import Cli
+
+def create_cli(order_processor: OrderProcessor) -> Callable[[list[str]], None]: # Returns the entrypoint's port: a command
+    return Cli(order_processor)
+```
+
+The startup code reads the environment, calls the factories, and hands the driving adapter to the entrypoint. For Python's `__main__`, that means calling it with the arguments:
+
+```python
+# infrastructure/startup/main.py
+import os
+import sys
+
+from infrastructure.factories.adapters.main.cli import create_cli
+from infrastructure.factories.modules.order_processor import create_order_processor
+
+if __name__ == "__main__": # The startup code: run with `python -m infrastructure.startup.main`
+    cli = create_cli(
         create_order_processor(
             provider="stripe",
             api_key=os.environ["STRIPE_API_KEY"],
@@ -279,6 +308,54 @@ if __name__ == "__main__": # The startup code
         )
     )
     cli(sys.argv[1:])
+```
+
+With a framework as the entrypoint, the startup code registers the driving adapters with it instead, and the framework defines the port. For FastAPI, a driving adapter is a function that returns an `APIRouter`, and the startup code includes each in the app:
+
+```python
+# infrastructure/startup/fastapi.py
+import os
+
+from fastapi import FastAPI
+
+from infrastructure.factories.adapters.fastapi.orders_router import create_orders_router
+from infrastructure.factories.modules.order_processor import create_order_processor
+
+app = FastAPI() # The entrypoint, configured: uvicorn runs infrastructure.startup.fastapi:app
+app.include_router(
+    create_orders_router(
+        create_order_processor(provider="stripe", api_key=os.environ["STRIPE_API_KEY"], currency="GBP")
+    )
+)
+```
+
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+
+```python
+# infrastructure/adapters/fastapi/call_router/router.py
+from collections.abc import Callable
+
+from fastapi import APIRouter, WebSocket
+
+from core.phone_call import CallDetails, PhoneCall
+
+type OpenPhoneCall = Callable[[WebSocket, CallDetails], PhoneCall] # The driving adapter's own port: opening the entity per request
+
+def call_router(*, path: str, open_call: OpenPhoneCall) -> APIRouter: # Its constructor: returns the APIRouter FastAPI calls
+    router = APIRouter()
+
+    @router.websocket(path)
+    async def call(websocket: WebSocket, ddiNo: str) -> None:
+        await open_call(websocket, CallDetails(ddi_number=ddiNo)).run()
+
+    return router
+```
+
+```python
+# infrastructure/startup/fastapi.py
+app.include_router(
+    create_call_router(path="/call", open_call=create_phone_call) # The adapter factory, given the phone call's module factory as the opener
+)
 ```
 
 ## Example 3: a module that needs another module
@@ -374,9 +451,10 @@ tests/
           order_processor/
             test_order_processor.py  # constructs OrderProcessorAdapter with FakeOrderProcessor
             adapters.py              # FakeOrderProcessor
-      entrypoints/
-        test_cli.py                # constructs Cli with FakeOrderProcessor
-        adapters.py                # FakeOrderProcessor
+        main/
+          cli/
+            test_cli.py            # constructs Cli with FakeOrderProcessor
+            adapters.py            # FakeOrderProcessor
   integration/
     infrastructure/
       adapters/
@@ -384,7 +462,7 @@ tests/
           postgres/
             test_postgres.py       # runs PostgresAdapter against a real database
   e2e/
-    test_cli.py                    # where the project has end-to-end tests: runs the startup code
+    test_main.py                   # where the project has end-to-end tests: runs infrastructure/startup/main.py
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:

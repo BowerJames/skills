@@ -11,9 +11,10 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Type
 | **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
 | **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.ts` |
 | **Module factory package** | `infrastructure/factories/modules/<module-name>`, with the factories in `factory.ts` |
-| **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, with the factories in `factory.ts` |
-| **Entrypoint** | a function returned by a constructor in `infrastructure/entrypoints` — `newCli` in `infrastructure/entrypoints/cli.ts` |
-| **Startup code** | a file beside the entrypoint that calls it — `infrastructure/entrypoints/cli.start.ts` |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module-name>/<adapter-name>`, or `<entrypoint-name>/<adapter-name>` for a driving adapter, with the factories in `factory.ts` |
+| **Entrypoint** | the framework or runtime that calls the program, never written in it: Fastify, Commander, or Node running a file, named `main` |
+| **Driving adapter** | a function returned by a constructor in `infrastructure/adapters/<entrypoint-name>/<adapter-name>` — `newCli` in `infrastructure/adapters/main/cli/adapter.ts` |
+| **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.ts` |
 
 **Package** here is a directory in one project, not an npm package. An ES module is a file; in these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.ts` file.
 
@@ -46,6 +47,10 @@ src/
           index.ts             # the export file
           adapter.ts           # newPaypalAdapter
           http.ts              # Http, newRealHttp
+      main/                    # the driving adapters of Node running a file
+        cli/
+          index.ts             # the export file
+          adapter.ts           # newCli
     factories/
       modules/
         order-processor/
@@ -59,9 +64,12 @@ src/
           paypal/
             index.ts           # the export file
             factory.ts         # createPaypalAdapter
-    entrypoints/
-      cli.ts
-      cli.start.ts
+        main/
+          cli/
+            index.ts           # the export file
+            factory.ts         # createCli
+    startup/
+      main.ts                  # the startup code for Node running a file
 ```
 
 `Currency` means the same thing to every module and belongs to none, so it is in the domain package. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the module's data file:
@@ -162,7 +170,7 @@ Nothing in `core` imports from `infrastructure`:
 import { newStripeAdapter } from "../../infrastructure/adapters/order-processor/stripe"; // bad: the core importing an adapter
 ```
 
-## Example 2: the factory packages and an entrypoint
+## Example 2: the factory packages, a driving adapter and its startup code
 
 The adapter's export file exports what its adapter factory needs to build it: its constructor, its own port, and what satisfies that port in production:
 
@@ -220,16 +228,16 @@ export function createOrderProcessor(
 export { createOrderProcessor } from "./factory";
 ```
 
-The entrypoint's constructor takes the entity it drives, and the entrypoint translates between the outside world and data carriers:
+The entrypoint here is Node itself, running the startup file; the project does not write it. What it reaches is a driving adapter: the function `newCli` returns has the shape of a command, a function given the command-line arguments. Its constructor takes the module interface it drives, and it translates between the arguments and data carriers:
 
 ```ts
-// src/infrastructure/entrypoints/cli.ts
-import type { Order, OrderProcessor } from "../../core/order-processor";
+// src/infrastructure/adapters/main/cli/adapter.ts
+import type { Order, OrderProcessor } from "../../../../core/order-processor";
 
 export function newCli(
   orderProcessor: OrderProcessor, // Its constructor takes the interface it drives
-): (argv: string[]) => void { // The entrypoint: calls no module's constructor and no factory, imports no adapter
-  return function cli(argv) {
+): (argv: string[]) => void { // A driving adapter: the shape the entrypoint calls, a command
+  return function cli(argv) { // calls no module's constructor and no factory, imports no other adapter
     const [id, ...costs] = argv;
     const order: Order = {
       id,
@@ -241,15 +249,65 @@ export function newCli(
 }
 ```
 
-The startup code beside it reads the environment, calls the factory and passes the entity to the entrypoint's constructor:
+Like every adapter, it has an adapter factory:
 
 ```ts
-// src/infrastructure/entrypoints/cli.start.ts
-import { createOrderProcessor } from "../factories/modules/order-processor";
-import { newCli } from "./cli";
+// src/infrastructure/factories/adapters/main/cli/factory.ts
+import type { OrderProcessor } from "../../../../../core/order-processor";
+import { newCli } from "../../../../adapters/main/cli";
 
-const cli = newCli(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP"));
+export function createCli(orderProcessor: OrderProcessor): (argv: string[]) => void { // Returns the entrypoint's port: a command
+  return newCli(orderProcessor);
+}
+```
+
+The startup code reads the environment, calls the factories, and hands the driving adapter to the entrypoint. For Node running a file, that means calling it with the arguments:
+
+```ts
+// src/infrastructure/startup/main.ts
+import { createCli } from "../factories/adapters/main/cli";
+import { createOrderProcessor } from "../factories/modules/order-processor";
+
+const cli = createCli(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP"));
 cli(process.argv.slice(2));
+```
+
+With a framework as the entrypoint, the startup code registers the driving adapters with it instead, and the framework defines the port. For Fastify, a driving adapter is a plugin, and the startup code registers each with the app:
+
+```ts
+// src/infrastructure/startup/fastify.ts
+import Fastify from "fastify";
+import { createOrdersRoutes } from "../factories/adapters/fastify/orders-routes";
+import { createOrderProcessor } from "../factories/modules/order-processor";
+
+const app = Fastify(); // The entrypoint, configured
+app.register(createOrdersRoutes(createOrderProcessor("stripe", process.env.STRIPE_API_KEY!, "GBP")));
+await app.listen({ port: 3000 });
+```
+
+When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it as its own port, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
+
+```ts
+// src/infrastructure/adapters/fastify/call-routes/adapter.ts
+import type { FastifyPluginAsync } from "fastify";
+import type { WebSocket } from "ws";
+import type { CallDetails, PhoneCall } from "../../../../core/phone-call";
+
+export type OpenPhoneCall = (socket: WebSocket, call: CallDetails) => PhoneCall; // The driving adapter's own port: opening the entity per request
+
+export function newCallRoutes(path: string, openCall: OpenPhoneCall): FastifyPluginAsync { // Its constructor: returns the plugin Fastify calls
+  return async (app) => {
+    app.get<{ Querystring: { ddiNo: string } }>(path, { websocket: true }, async (socket, request) => {
+      await openCall(socket, { ddiNumber: request.query.ddiNo }).run();
+    });
+  };
+}
+```
+
+```ts
+// src/infrastructure/startup/fastify.ts
+app.register(fastifyWebsocket);
+app.register(createCallRoutes("/call", createPhoneCall)); // The adapter factory, given the phone call's module factory as the opener
 ```
 
 ## Example 3: a module that needs another module
@@ -348,9 +406,10 @@ tests/
           order-processor/
             order-processor.test.ts  # constructs with newOrderProcessorAdapter and a fake order processor
             adapters.ts              # newFakeOrderProcessor
-      entrypoints/
-        cli.test.ts                # constructs with newCli and a fake order processor
-        adapters.ts                # newFakeOrderProcessor
+        main/
+          cli/
+            cli.test.ts            # constructs with newCli and a fake order processor
+            adapters.ts            # newFakeOrderProcessor
   integration/
     infrastructure/
       adapters/
@@ -358,7 +417,7 @@ tests/
           postgres/
             postgres.test.ts       # runs the postgres adapter against a real database
   e2e/
-    cli.test.ts                    # where the project has end-to-end tests: runs the startup code
+    main.test.ts                   # where the project has end-to-end tests: runs infrastructure/startup/main.ts
 ```
 
 A test imports the entity under test from its export file and its test adapters from beside itself:

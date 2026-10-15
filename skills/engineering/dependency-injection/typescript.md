@@ -309,7 +309,7 @@ function createOrderProcessor(apiKey: string, currency: Currency): OrderProcesso
 ```
 
 ```ts
-// the program's startup code, an entrypoint or a settings loader: whichever the design chooses
+// the program's startup code or a settings loader: whichever the design chooses
 const orderProcessor = createOrderProcessor(process.env.STRIPE_API_KEY!, "GBP");
 ```
 
