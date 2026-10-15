@@ -1,6 +1,6 @@
 ---
 name: dependency-injection
-description: Discipline for how entities get their dependencies: what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a module's constructor or its interface, writing or changing a factory, or fixing modules that create or fetch what they need. Requires the codebase-design skill.
+description: Discipline for how entities get their dependencies; what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a module's constructor or its interface, writing or changing a factory, or fixing modules that create or fetch what they need. Requires the codebase-design skill.
 ---
 
 # Prerequisites
