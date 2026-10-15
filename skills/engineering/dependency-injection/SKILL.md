@@ -21,7 +21,7 @@ A module's constructor takes at most one parameter that carries behaviour: the m
 
 - **The port holds everything the module needs.** A behaviour that needs something new adds a method to the port, never a second port.
 - **A port is an interface, never an implementation.** A constructor never names an adapter's type.
-- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
+- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. The exception is a domain interface, whose meaning is the same everywhere: any module's port may use it. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
 - **A port holds only what the module calls.** It is shaped by the module's needs, not copied from the adapter that will satisfy it.
 
 Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier, never an object from a library: a module is self-contained, so what a library provides reaches it through its port.
@@ -57,7 +57,7 @@ This improves **testability for everyone** since constructing any entity is safe
 A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. There are two kinds:
 
 - **A module factory** builds a module: it gets an adapter for the module's port and calls the module's constructor.
-- **An adapter factory** builds an adapter: it builds the parts the adapter's constructor takes and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
+- **An adapter factory** builds an adapter: it builds the parts the adapter's constructor takes and calls the adapter's constructor. Every adapter with a package of its own has one, even an adapter with nothing to build but itself; a part of an adapter is built by that adapter's factory.
 
 ### 4. A factory returns the interface
 

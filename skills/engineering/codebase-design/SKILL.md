@@ -30,13 +30,17 @@ _Avoid_: API, signature (too narrow — they refer only to the type-level surfac
 
 **Port** — An interface an entity defines for what it needs from outside itself: passed to its constructor or, for an entrypoint, registered with it. A module defines at most one port, and that port holds everything the module needs from outside itself.
 
-**Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. It is self-contained: it depends only on the data carriers of the domain package and on its own port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
+**Module** — a package in the core with an interface, an implementation, a constructor, and at most one port. It is self-contained: it depends only on the data carriers and interfaces of the domain package and on its own port. Only these packages are modules: code inside an implementation is not a module, whatever its shape.
 
 _Avoid_: unit, component, service.
 
 **Configuration** — Values in the constructor of an entity that alter behaviour without editing implementation. Distinct from a port, which is an interface, not a value.
 
-**Adapter** — An entity defined to satisfy a port. A **driven adapter** satisfies a module's port: the module calls it. A **driving adapter** satisfies an entrypoint's port: the entrypoint calls it, and it drives the modules it needs through their interfaces.
+**Adapter** — An entity defined to satisfy an interface that a constructor takes: a module's port, an entrypoint's port, a domain interface, or an adapter's own port. A **driven adapter** is called by a module, through its port or a domain interface its port uses. A **driving adapter** satisfies an entrypoint's port: the entrypoint calls it, and it drives the modules it needs through their interfaces.
+
+**Domain interface** — an interface that belongs to no one module and means the same thing to every entity that uses it: `AgentTool`, a tool a model can call. It lives in the domain package beside the shared data carriers. A module's port may use it, and its implementations are adapters of it. Like a data carrier, it is never shared only because a second entity needs it: it is shared because its meaning is the same everywhere.
+
+_Avoid_: shared interface, common interface (names that say only that something is shared).
 
 **Entrypoint** — what receives input from outside the program and calls into it: a web framework, a CLI runner, a queue consumer, a scheduler, or the process's `main` where there is no framework. The project does not write it; it configures it and starts it. Its port is the shape of what it calls: a route, a command, a message callback. Driving adapters satisfy it.
 
@@ -88,7 +92,7 @@ Split behaviour out into its own module when one of these holds:
 - **Capability is measured against the interface, not the implementation.** A module can provide a large range of capabilities through the adapters of its port.
 - **An entity's constructor is not part of its interface.** Adding complexity to the constructor of a module does not increase the complexity of the entity's interface and therefore does not reduce the leverage.
 - **An entity's interface and constructor are the test surface.** Callers and tests drive through the same interface. Behaviours can be measured through the interface and constructor.
-- **A module is self-contained.** It depends on nothing but the data carriers of the domain package, its own port, and the language itself: no other module, no adapter, no third-party library. Anything else it needs is a method on its port.
+- **A module is self-contained.** It depends on nothing but the data carriers and interfaces of the domain package, its own port, and the language itself: no other module, no adapter, no third-party library. Anything else it needs is a method on its port.
 - **A port between two modules is a cost paid for independence.** It should buy something: a separate test surface, a second user, or the ability to swap.
 
 ## Errors
@@ -110,11 +114,13 @@ Good entities make testing natural:
 - A **Module** has exactly one **Interface** (the surface it presents to callers and tests) and at most one **Port**.
 - **Capability** is a property of an **Entity**, measured against its **Interface**.
 - An entity can have many **Factories** but only one **Constructor**.
-- An **Adapter**'s interface must satisfy a **Port**, and it satisfies the whole port.
-- Every **Adapter** in the program satisfies the port of a **Module** (a driven adapter) or of an **Entrypoint** (a driving adapter). A test adapter is the exception: it satisfies whichever port of the entity under test a test needs, an adapter's own ports included.
+- An **Adapter**'s interface must satisfy the interface it is defined for, and it satisfies the whole of it.
+- Every **Adapter** satisfies one interface that a constructor takes, and belongs to whoever owns that interface: a **Module** (its port), an **Entrypoint** (its port), the domain (a **Domain interface**), or an **Adapter** (its own port).
 - A **Port** belongs to the entity that defines it. A module has at most one. Any other entity can have its own: whatever an adapter's constructor takes as an interface is a port of it. An entrypoint's port is defined by the framework or runtime that is the entrypoint.
-- In the program, what satisfies an adapter's own ports is not an adapter in its own right: a part defined in the adapter's package, an object the entrypoint hands it (a request, a socket), or an entity or factory passed to its constructor. The exception is an adapter wrapping another adapter of the same port, such as `retrying`: the inner one satisfies the same port.
-- An **Adapter** is told apart from a **Module** by its role, not its shape: it exists to satisfy a port.
+- A port can use a **Domain interface**, as a module's port that returns the `AgentTool`s it runs does. One port per module still holds: the domain interface is shared vocabulary, not a second port.
+- An adapter of another adapter's own port belongs to that adapter, and is one of its parts. When an interface needs implementations that belong to no one adapter, because its meaning is the same everywhere, it is a **Domain interface**, and its implementations are adapters of it.
+- An adapter is combined with another at runtime, never by importing it: a factory passes one to the other's constructor, typed as the interface it satisfies. `retrying` receives the adapter it wraps; a tool runner's adapter receives the `AgentTool`s it offers.
+- An **Adapter** is told apart from a **Module** by its role, not its shape: it exists to satisfy an interface that a constructor takes.
 
 ## Rejected framings
 

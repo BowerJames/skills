@@ -9,9 +9,10 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 | **Package** | a directory with an `__init__.py` |
 | **Export file** | the package's `__init__.py`, re-exporting names and listing them in `__all__` |
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
-| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py` |
+| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py`, `core/domain/agent_tool.py` |
+| **Domain interface** | a `typing.Protocol` in its own file in `core/domain` — `AgentTool` in `core/domain/agent_tool.py` |
 | **Module factory package** | `infrastructure/factories/modules/<module_name>`, with the factories in `factory.py` |
-| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter, with the factories in `factory.py` |
+| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter, or `<interface_name>/<adapter_name>` for an adapter of a domain interface, with the factories in `factory.py` |
 | **Entrypoint** | the framework or runtime that calls the program, never written in it: FastAPI, Click, Celery, or Python running a file as `__main__`, named `main` |
 | **Driving adapter** | a class in `infrastructure/adapters/<entrypoint_name>/<adapter_name>` — `Cli` in `infrastructure/adapters/main/cli/adapter.py` |
 | **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.py` with its `if __name__ == "__main__":` block |
@@ -518,6 +519,155 @@ Legacy code that needs an `OrderProcessor` calls the factory and drives the inte
 from infrastructure.factories.modules.order_processor import create_order_processor   # good: a module factory
 from core.order_processor import OrderProcessorImpl                                  # bad: the constructor
 ```
+
+## Example 6: a domain interface and its adapters
+
+A `ToolRunner` module runs the tools a model calls. A tool means the same thing to every entity that uses it, so `AgentTool` is a domain interface, and every tool is an adapter of it:
+
+```
+src/
+  core/
+    domain/
+      agent_tool.py              # AgentTool: a domain interface
+    tool_runner/
+      port.py                    # ToolRunnerPort: tools(), using AgentTool
+  infrastructure/
+    adapters/
+      agent_tool/                # the adapters of the AgentTool domain interface
+        order_processor/
+          adapter.py             # PlaceOrderTool: places an order through the OrderProcessor module
+          params.py              # PlaceOrderParams: the pydantic model of its arguments
+        structured/
+          adapter.py             # StructuredTool: validates arguments against a pydantic model
+      tool_runner/
+        toolset/
+          adapter.py             # Toolset: offers the runner the tools it is given
+    factories/
+      adapters/
+        agent_tool/
+          order_processor/       # create_place_order_tool
+          structured/            # create_structured_tool
+        tool_runner/
+          toolset/               # create_toolset
+      modules/
+        tool_runner/             # create_tool_runner
+```
+
+The domain interface has a shape and no behaviour. The module's one port uses it:
+
+```python
+# core/domain/agent_tool.py
+from collections.abc import Mapping
+from typing import Any, Protocol
+
+class AgentTool(Protocol): # A domain interface: the same meaning to every entity that uses it
+    @property
+    def name(self) -> str: ...
+    @property
+    def description(self) -> str: ...
+    @property
+    def parameters(self) -> Mapping[str, Any]: ... # the JSON Schema of execute's arguments
+    async def execute(self, arguments: dict[str, Any]) -> str: ...
+```
+
+```python
+# core/tool_runner/port.py
+from collections.abc import Sequence
+from typing import Protocol
+
+from core.domain.agent_tool import AgentTool
+
+class ToolRunnerPort(Protocol): # The module's one port; it uses the domain interface
+    def tools(self) -> Sequence[AgentTool]: ...
+```
+
+Each tool is an adapter of the domain interface, under `infrastructure/adapters/agent_tool`. One connects the order processor module, so it is named for that module:
+
+```python
+# infrastructure/adapters/agent_tool/order_processor/adapter.py
+from typing import Any
+
+from core.domain.agent_tool import AgentTool
+from core.order_processor import Order, OrderItem, OrderProcessor
+
+class PlaceOrderTool(AgentTool): # An adapter of the domain interface, connecting the order processor module
+    name = "place_order"
+    description = "Place the caller's order."
+    parameters = {"type": "object", "properties": {"id": {"type": "string"}, "costs": {"type": "array"}}}
+
+    def __init__(self, order_processor: OrderProcessor): # Takes the module's interface, never its implementation
+        self.order_processor = order_processor
+
+    async def execute(self, arguments: dict[str, Any]) -> str:
+        order = Order(
+            id=arguments["id"],
+            items=tuple(OrderItem(name=f"item_{i}", cost=cost) for i, cost in enumerate(arguments["costs"]))
+        )
+        receipt = self.order_processor(order)
+        return f"Charged {receipt.total} {receipt.currency}."
+```
+
+A generic adapter of the same interface is reused by wrapping, never by importing. `StructuredTool` validates the arguments against a pydantic model, then passes them to the tool it wraps:
+
+```python
+# infrastructure/adapters/agent_tool/structured/adapter.py
+from collections.abc import Mapping
+from typing import Any
+
+from pydantic import BaseModel, ValidationError
+
+from core.domain.agent_tool import AgentTool
+
+class StructuredTool(AgentTool): # A generic adapter of the domain interface
+    def __init__(self, params: type[BaseModel], inner: AgentTool): # The tool it wraps, typed as the interface
+        self.params = params
+        self.inner = inner
+
+    @property
+    def name(self) -> str:
+        return self.inner.name
+
+    @property
+    def description(self) -> str:
+        return self.inner.description
+
+    @property
+    def parameters(self) -> Mapping[str, Any]:
+        return self.params.model_json_schema() # The schema comes from the model, not the inner tool
+
+    async def execute(self, arguments: dict[str, Any]) -> str:
+        try:
+            valid = self.params.model_validate(arguments)
+        except ValidationError as error:
+            return error.json() # handled: the model reads which arguments to correct
+        return await self.inner.execute(valid.model_dump())
+```
+
+The factories combine them. A tool's factory gets the generic adapter from its factory, and the module factory gets the toolset from its own:
+
+```python
+# infrastructure/factories/adapters/agent_tool/order_processor/factory.py
+from core.domain.agent_tool import AgentTool
+from core.order_processor import OrderProcessor
+from infrastructure.adapters.agent_tool.order_processor import PlaceOrderParams, PlaceOrderTool
+from infrastructure.factories.adapters.agent_tool.structured import create_structured_tool
+
+def create_place_order_tool(order_processor: OrderProcessor) -> AgentTool: # Returns the domain interface it satisfies
+    return create_structured_tool(params=PlaceOrderParams, inner=PlaceOrderTool(order_processor))
+```
+
+```python
+# infrastructure/factories/modules/tool_runner/factory.py
+from core.order_processor import OrderProcessor
+from core.tool_runner import ToolRunner, ToolRunnerImpl
+from infrastructure.factories.adapters.agent_tool.order_processor import create_place_order_tool
+from infrastructure.factories.adapters.tool_runner.toolset import create_toolset
+
+def create_tool_runner(order_processor: OrderProcessor) -> ToolRunner:
+    return ToolRunnerImpl(create_toolset([create_place_order_tool(order_processor)]))
+```
+
+The tests for `ToolRunner` pass a fake port returning fake `AgentTool`s; each tool adapter is tested on its own, through the domain interface, under `tests/unit/infrastructure/adapters/agent_tool/<adapter_name>`.
 
 ## Checking the rules
 

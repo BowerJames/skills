@@ -5,7 +5,7 @@ description: Policy for where code lives on disk. Use when you need to create ne
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, implementation, constructor, port, adapter, driving and driven adapter, entrypoint, factory, data carrier, resource, behaviour) exactly.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, implementation, constructor, port, adapter, driving and driven adapter, entrypoint, domain interface, factory, data carrier, resource, behaviour) exactly.
 - **[testing](../testing/SKILL.md)** — its vocabulary for the kinds of test and where they point: entity under test, test adapter, unit test, integration test, end-to-end test.
 
 # Project Structure
@@ -15,7 +15,7 @@ Project structure is the mapping of entities onto files. The structure is hexago
 ```
 src/
   core/
-    domain/                          # data carriers that belong to no one module
+    domain/                          # data carriers and domain interfaces that belong to no one module
     <module_name>/
       interface                      # the module's interface
       port                           # the module's port, if it has one
@@ -28,11 +28,13 @@ src/
         <adapter_name>/              # a driven adapter for that module's port
       <entrypoint_name>/
         <adapter_name>/              # a driving adapter for that entrypoint's port
+      <interface_name>/
+        <adapter_name>/              # an adapter of that domain interface
     factories/
       modules/
         <module_name>/               # the module factories of that module
       adapters/
-        <module_name>/ or <entrypoint_name>/
+        <module_name>/, <entrypoint_name>/ or <interface_name>/
           <adapter_name>/            # the adapter factories of that adapter
     startup/                         # the startup code, one file per entrypoint
 tests/
@@ -55,11 +57,15 @@ _Avoid_: folder (says nothing about ownership), module (already means a package 
 
 _Avoid_: public API (interface already names what callers must know), barrel (names the mechanism, not the role), entry point (too close to entrypoint).
 
-**Domain package** — the `core/domain` package, holding data carriers and nothing else: the ones that belong to no one module and mean the same thing in every module, such as `Currency` and `CustomerId`. Nothing with behaviour goes in it. One file per concept, named for the concept. `domain` is a reserved name: no module is called `domain`.
+**Domain package** — the `core/domain` package, holding data carriers and domain interfaces and nothing else: the ones that belong to no one module and mean the same thing in every entity that uses them, such as `Currency`, `CustomerId` and `AgentTool`. Nothing with behaviour goes in it: an interface has none, only a shape. One file per concept, named for the concept. `domain` is a reserved name: no module is called `domain`.
 
 _Avoid_: utils, common, shared, helpers (names that say only that something is shared, so they accept anything).
 
-**Entrypoint name** — the name of the package under `infrastructure/adapters` that holds the driving adapters of one entrypoint, named for the framework or runtime: `fastapi`, `click`, `celery`, or `main` for the process's `main` where there is no framework. An entrypoint name is never also a module name.
+**Entrypoint name** — the name of the package under `infrastructure/adapters` that holds the driving adapters of one entrypoint, named for the framework or runtime: `fastapi`, `click`, `celery`, or `main` for the process's `main` where there is no framework.
+
+**Interface name** — the name of the package under `infrastructure/adapters` that holds the adapters of one domain interface, named for the interface's file in the domain package: `agent_tool` for `core/domain/agent_tool`.
+
+Module, entrypoint and interface names share the `infrastructure/adapters` directory, so no name is used twice.
 
 **Startup code** — the code that starts the program: it acquires what comes from the environment, calls the factories, registers the driving adapters with the entrypoint, and starts it. It lives in `infrastructure/startup`, one file per entrypoint, and holds no behaviour.
 
@@ -67,7 +73,7 @@ _Avoid_: container, composition root, bootstrap.
 
 **Module factory package** — the `infrastructure/factories/modules/<module_name>` package, holding the module factories of one module: the code that gets adapters from their factories and passes them to the module's constructor.
 
-**Adapter factory package** — the `infrastructure/factories/adapters/<module_name>/<adapter_name>` package, or `<entrypoint_name>/<adapter_name>` for a driving adapter, holding the adapter factories of one adapter: the code that builds the adapter's parts and passes them to the adapter's constructor.
+**Adapter factory package** — the `infrastructure/factories/adapters/<module_name>/<adapter_name>` package, or `<entrypoint_name>/<adapter_name>` for a driving adapter, or `<interface_name>/<adapter_name>` for an adapter of a domain interface, holding the adapter factories of one adapter: the code that builds the adapter's parts and passes them to the adapter's constructor.
 
 _Avoid_: container, composition root, bootstrap.
 
@@ -77,7 +83,7 @@ _Avoid_: container, composition root, bootstrap.
 
 ### 1. Imports point inward
 
-- The domain package imports nothing: not the rest of the project, not a third-party library.
+- The domain package imports nothing from outside itself: not the rest of the project, not a third-party library. A domain interface may use the domain's data carriers.
 - A module's package imports only from the domain package. It never imports another module's package, never imports from the infrastructure, and never imports a third-party library.
 - The infrastructure imports from the core. The core never imports from the infrastructure.
 
@@ -85,12 +91,12 @@ This improves **locality for maintainers** since a change to an adapter, the sta
 
 This improves **testability for everyone** since a module can be constructed with nothing but its own package, the domain package and a test adapter.
 
-### 2. The core holds modules and data carriers, nothing else
+### 2. The core holds modules, data carriers and domain interfaces, nothing else
 
-- **The domain package holds data carriers only**, and only those that belong to no one module. Nothing with behaviour goes in it: anything that carries behaviour is either a module in the core or an adapter in the infrastructure.
+- **The domain package holds data carriers and domain interfaces only**, and only those that belong to no one module. Nothing with behaviour goes in it: anything that carries behaviour is either a module in the core or an adapter in the infrastructure.
 - **Every other package in the core is a module.** It has an interface, an implementation and at most one port. The core holds no adapters, no factories and no startup code, and knows nothing of the entrypoints.
 - **A module never imports another module.** A module that needs another module adds what it needs to its own port. An adapter in `infrastructure/adapters/<module_name>` satisfies the port by calling the other module through its interface.
-- **A module is self-contained.** It depends only on the data carriers of the domain package and on its own port. A third-party library is imported only from the infrastructure, and a module reaches what it provides through its port. The language's built-ins and the parts of its standard library that reach no resource are part of the language, not dependencies.
+- **A module is self-contained.** It depends only on the data carriers and interfaces of the domain package and on its own port. A third-party library is imported only from the infrastructure, and a module reaches what it provides through its port. The language's built-ins and the parts of its standard library that reach no resource are part of the language, not dependencies.
 
 Whether behaviour that reaches no resource is a module in the core or an adapter in the infrastructure is a design decision. As a module it has its own interface and port, and other modules reach it through their port and an adapter. As an adapter it exists only to satisfy one module's port.
 
@@ -119,23 +125,29 @@ This improves **leverage for callers** since the interface, data and errors file
 
 This improves **flexibility for designers** since the port file shows everything an adapter must provide to extend the module's capability.
 
-### 4. An adapter lives under the owner of the port it satisfies
+### 4. An adapter lives under the owner of the interface it satisfies
 
-A driven adapter's package is `infrastructure/adapters/<module_name>/<adapter_name>`, where `<module_name>` matches the package in the core that defines the port. A driving adapter's package is `infrastructure/adapters/<entrypoint_name>/<adapter_name>`, where `<entrypoint_name>` names the entrypoint whose port it satisfies; rule 6 covers what it does.
+| The interface it satisfies | Its package |
+|---|---|
+| a module's port | `infrastructure/adapters/<module_name>/<adapter_name>`, where `<module_name>` matches the package in the core that defines the port |
+| an entrypoint's port | `infrastructure/adapters/<entrypoint_name>/<adapter_name>`; rule 6 covers what a driving adapter does |
+| a domain interface | `infrastructure/adapters/<interface_name>/<adapter_name>`, where `<interface_name>` matches the interface's file in the domain package |
+| another adapter's own port | inside that adapter's package, as one of its parts |
 
-An adapter satisfies the whole port. It is placed by its role, not by what it reaches: an entity defined to satisfy a module's port lives here whether or not it reaches a resource. A driven adapter is named for what sets it apart from the other adapters of that port: the resource it reaches (`stripe`, `paypal`, `postgres`), or what it does instead (`in_memory`, `flat_rate`, `retrying`). A driving adapter is named for the input it handles: `cli`, `orders_router`.
+An adapter satisfies the whole interface. It is placed by its role, not by what it reaches: an entity defined to satisfy an interface lives under that interface's owner whether or not it reaches a resource. A driven adapter, or an adapter of a domain interface, is named for what sets it apart from the other adapters of that interface: the resource it reaches (`stripe`, `paypal`, `postgres`), or what it does instead (`in_memory`, `flat_rate`, `retrying`, `structured`). A driving adapter is named for the input it handles: `cli`, `orders_router`.
 
 An adapter that connects one module to another is named for the module it calls: `infrastructure/adapters/checkout/order_processor`. It translates between the data carriers of the two modules.
 
 - A driven adapter imports the port it satisfies, and that module's data carriers, from the module's export file, and data carriers from the domain package.
 - A driving adapter imports what its framework needs from the framework, and the interfaces and data carriers of the modules it drives from their export files.
+- An adapter of a domain interface imports the interface, and any data carriers it uses, from the domain package.
 - An adapter that connects one module to another also imports the other module's interface and data carriers from its export file, and receives the entity through its own constructor.
-- An adapter never imports another adapter. An adapter that wraps another adapter of the same port, such as `retrying`, receives it through its constructor, typed as the port.
+- An adapter never imports another adapter. Adapters are combined at runtime: a factory passes one to another's constructor, typed as the interface it satisfies. An adapter that wraps another adapter of the same port, such as `retrying`, receives it that way, and so does an adapter that offers a module a set of adapters of a domain interface.
 - An adapter's export file exports its constructor, its own ports, and the parts that satisfy them in production. Within `src`, only the adapter's own adapter factory package imports them. Its unit tests import its constructor and its own ports.
-- An adapter's package organises its contents however it wants. Whatever the adapter's constructor takes — its own ports, and what satisfies them — and any error it determines is defined inside the adapter's package.
+- An adapter's package organises its contents however it wants. Whatever the adapter's constructor takes — its own ports, and what satisfies them — and any error it determines is defined inside the adapter's package. The exceptions are a module's interface and a domain interface: they are defined where they belong, and what satisfies them is passed in by a factory.
 - Two adapters share no code, even when they reach the same resource or differ in one detail. Each holds what it needs.
 
-This improves **locality for maintainers** since the path of an adapter names the module or entrypoint it serves, and everything one adapter knows is in one package.
+This improves **locality for maintainers** since the path of an adapter names the module, entrypoint or domain interface it serves, and everything one adapter knows is in one package.
 
 This improves **flexibility for designers** since adding a capability to a module is adding one package beside the existing adapters.
 
@@ -144,7 +156,7 @@ This improves **flexibility for designers** since adding a capability to a modul
 Every factory lives in `infrastructure/factories`, split at the top by what it builds:
 
 - **Module factories** live in `infrastructure/factories/modules/<module_name>`, where `<module_name>` matches the module's package in the core.
-- **Adapter factories** live in `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter: the same path as the adapter's package under `infrastructure/adapters`. Every adapter has an adapter factory package, driving adapters included.
+- **Adapter factories** live in `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter, or `<interface_name>/<adapter_name>` for an adapter of a domain interface: the same path as the adapter's package under `infrastructure/adapters`. Every adapter with a package of its own has an adapter factory package, driving adapters included. A part, an adapter of another adapter's own port, is built by the factory of the adapter it belongs to.
 
 No factory lives in the core, because building an entity means importing what it is built from, and the core imports nothing from the infrastructure. No factory lives in an adapter's package, so the factories directory is the one place where the program is wired.
 
@@ -172,15 +184,17 @@ This improves **locality for maintainers** since a change to how a module is wir
 
 This improves **testability for everyone** since a driving adapter's translation is a behaviour that a unit test can measure by passing it a test adapter for each interface it drives.
 
-### 7. A data carrier belongs to the module whose interface or port it appears in
+### 7. A data carrier or interface belongs to the module whose interface or port it appears in
 
 A data carrier that appears in a module's interface or port is defined in that module's data file and exported with it. A second module that needs the same data declares its own data carrier in its own data file, and the adapter that connects the two translates between them.
 
 A data carrier goes in the domain package only when it belongs to no one module and means the same thing in every module that uses it: `Currency`, `CustomerId`. A data carrier is never moved into the domain package because a second module needs it.
 
+The same test holds for an interface. A domain interface, such as `AgentTool`, belongs to no one module and means the same thing to every entity that uses it: a module's port may use it, and its implementations are adapters under `infrastructure/adapters/<interface_name>`. An interface that only one entity needs stays where it is declared: a module's port in the module's port file, an adapter's own port in the adapter's package.
+
 A type used only inside one module's implementation stays in that module's implementation and is not exported.
 
-This improves **locality for maintainers** since a change to a module's data reaches only that module, its callers and its adapters, and never another module.
+This improves **locality for maintainers** since a change to a module's data reaches only that module, its callers and its adapters, and never another module. A change to a domain data carrier or interface reaches every entity that uses it, which is why only what means the same everywhere goes there.
 
 ### 8. Name a package for what it is, not for being shared
 
@@ -189,7 +203,9 @@ There is no `utils`, `common`, `shared` or `helpers` package. A helper used by o
 - If it meets one of the reasons in codebase-design's "When to make a module", it is a module: give it an interface, a port if it needs one, and a package named for what it does (`retry`). Other modules reach it through their port and an adapter.
 - Otherwise the duplication was the right call.
 
-A helper never goes in the domain package: it carries behaviour, and the domain package holds data carriers only.
+A helper never goes in the domain package: it carries behaviour, and the domain package holds data carriers and domain interfaces only.
+
+Reusable behaviour between adapters is reached through an interface, never by importing. A generic adapter, such as a tool built from a schema, is an adapter of a domain interface like any other, and a factory passes it to whatever needs it.
 
 This improves **leverage for callers** since a package's name says what it offers.
 
@@ -222,5 +238,5 @@ This improves **locality for maintainers** since every crossing between legacy c
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, a driving adapter, its startup code and its tests
-- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, a driving adapter, its startup code and its tests
+- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, a driving adapter, its startup code, a domain interface with its adapters, and the tests
+- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` module with its adapters, its module and adapter factory packages, a driving adapter, its startup code, a domain interface with its adapters, and the tests

@@ -30,7 +30,7 @@ The module's port is added to the constructor when a behaviour first needs somet
 
 ## Adapters
 
-An adapter is driven by tests in the same way, through the port it satisfies and its own constructor. Where a behaviour can be measured with test adapters for what the adapter's constructor takes, the cycle uses unit tests. Where it can only be measured against the real resource, the cycle's test is an integration test.
+An adapter is driven by tests in the same way, through the interface it satisfies and its own constructor. Where a behaviour can be measured with test adapters for what the adapter's constructor takes, the cycle uses unit tests. Where it can only be measured against the real resource, the cycle's test is an integration test.
 
 ## After the cycles
 
