@@ -123,10 +123,10 @@ test("charge answers false when the card is declined", () => {
 });
 ```
 
-An entrypoint's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
+A driving adapter's constructor takes the interfaces it drives, so its translation is unit tested with a test adapter for each:
 
 ```ts
-function newFakeOrderProcessor() { // a test adapter for the entrypoint's port: the OrderProcessor interface
+function newFakeOrderProcessor() { // a test adapter for the driving adapter's own port: the OrderProcessor interface
   const orders: Order[] = [];
   const orderProcessor: OrderProcessor = (order) => {
     orders.push(order);
@@ -157,7 +157,7 @@ test("saves and loads an order", () => { // runs against the real resource
 ```ts
 // tests/e2e/cli.test.ts
 test("cli processes an order", () => { // optional: runs the startup code with the production factories
-  const output = execFileSync("tsx", ["src/infrastructure/entrypoints/cli.start.ts", "order_id", "100"], { encoding: "utf8" });
+  const output = execFileSync("tsx", ["src/infrastructure/startup/main.ts", "order_id", "100"], { encoding: "utf8" });
   expect(output).toContain("total=100");
 });
 ```

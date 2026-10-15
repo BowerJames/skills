@@ -8,7 +8,7 @@ My personal AI coding agent skills, following the [Agent Skills](https://agentsk
 
 A prerequisite chain — install together:
 
-- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — shared vocabulary for designing modules: interface, constructor, port, adapter, factory, behaviour, resource, and how errors cross an interface.
+- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — shared vocabulary for designing modules: interface, constructor, port, driving and driven adapter, entrypoint, factory, behaviour, resource, and how errors cross an interface.
 - **[dependency-injection](skills/engineering/dependency-injection/SKILL.md)** — how entities get their dependencies: a constructor takes the module's one port and its configuration, and module and adapter factories only wire, reaching no resource. *Requires codebase-design.*
 
 Testing:
@@ -18,7 +18,7 @@ Testing:
 
 Structure:
 
-- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: self-contained modules in the core, data carriers alone in the domain, adapters, factories and entrypoints in the infrastructure, imports pointing inward, tests mirroring the source tree, legacy code reached through ports. *Requires codebase-design and testing.*
+- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: self-contained modules in the core, data carriers alone in the domain, driving and driven adapters, factories and startup code in the infrastructure, imports pointing inward, tests mirroring the source tree, legacy code reached through ports. *Requires codebase-design and testing.*
 
 ### Utils
 
