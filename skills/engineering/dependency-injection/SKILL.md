@@ -1,48 +1,49 @@
 ---
 name: dependency-injection
-description: Discipline for how entities get their dependencies; what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a module's constructor or its interface, writing or changing a factory, or fixing modules that create or fetch what they need. Requires the codebase-design skill.
+description: Discipline for how entities get their dependencies; what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a component's constructor or its interface, writing or changing a factory or a composite, or fixing components that create or fetch what they need. Requires the codebase-design skill.
 ---
 
 # Prerequisites
 
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, data carrier, resource) exactly.
+- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, behaviour, implementation, constructor, port, configuration, adapter, decorator, contract, foreign component, edge component, view, entrypoint, factory, composite, assembly, data carrier, resource) exactly.
 
 # Dependency Injection
 
-Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a module receives an **Adapter** for its **Port**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: a module factory chooses adapters and calls the module's constructor, and an adapter factory builds an adapter. The aim is that every resource sits behind a port, the port is declared in the constructor, the **Interface** carries only data, and nothing reaches a resource while entities are being built.
+Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a component receives what satisfies each of its **Ports**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: it chooses what satisfies each port and calls the constructor. The aim is that every resource sits behind a port or a foreign object passed to an edge component, every dependency is declared in a constructor, the **Interface** carries only data, and nothing reaches a resource while the **Assembly** is being built.
 
 Where factories live on disk is covered by [project-structure](../project-structure/SKILL.md).
 
 ## The constructor
 
-### 1. A constructor takes the module's port and its configuration
+### 1. A constructor takes the component's ports and its configuration
 
-A module's constructor takes at most one parameter that carries behaviour: the module's port, an interface the module declares itself. Everything else it takes is configuration.
+A component's constructor takes one port for each thing it depends on. Everything else it takes is configuration.
 
-- **The port holds everything the module needs.** A behaviour that needs something new adds a method to the port, never a second port.
-- **A port is an interface, never an implementation.** A constructor never names an adapter's type.
-- **A port belongs to the module that declares it.** A constructor never names another module's interface. Two modules that need the same thing each declare it on their own port. The exception is a domain interface, whose meaning is the same everywhere: any module's port may use it. Their adapters can be thin wrappers around the same resource or library: the adapter decides how each module uses it.
-- **A port holds only what the module calls.** It is shaped by the module's needs, not copied from the adapter that will satisfy it.
+- **One port per dependency, named for what it is to the component.** `payments`, `clock`, `tools`. A behaviour that needs something new from a dependency the component already has adds a method to that port's interface; a behaviour that needs a new dependency adds a new port.
+- **A port is an interface, never an implementation.** A constructor never names an edge component's or an adapter's type.
+- **A port's interface belongs to the component, or is a contract.** A constructor never names another component's interface. Two components that need the same thing each declare it, unless it means the same thing to both, in which case it is promoted to a contract that both ports use.
+- **A port holds only what the component calls.** Its interface is shaped by the component's needs, not copied from whatever will satisfy it.
 
-Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier, never an object from a library: a module is self-contained, so what a library provides reaches it through its port.
+Data carriers and configuration have no implementation to swap, so they are passed as their concrete types. Configuration is a plain value or a data carrier.
 
-An adapter's constructor takes interfaces of the four kinds (a module's port or interface, a domain interface, an entrypoint's port), configuration, and, at the edge where it reaches a resource, the library's own object, or a view of it where the library offers no test hook. It defines no port of its own: anything with behaviour behind it that the adapter needs is a module or a domain interface, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An **outbound edge component**'s constructor also takes its foreign dependency: the library's own object (an `httpx.Client`, a model provider's SDK client), or a view of it where the library offers no test hook. It is the one place a foreign object appears in a constructor.
 
-When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
+An **adapter**'s constructor takes the interfaces of the components it calls, contracts and configuration. It never takes a port's interface, except a **decorator**, which takes the very interface it satisfies. It takes no foreign object: anything with behaviour behind it that it needs is a component or a contract, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
 
-This improves **flexibility for designers** since a new adapter adds a capability without touching the module.
+This improves **flexibility for designers** since a new component or adapter passed to a port adds a capability without touching the component, and each port can be swapped on its own.
 
-This improves **locality for maintainers** since a port changes with its module alone, and a change to an adapter or to another module stops at the adapter.
+This improves **locality for maintainers** since a port changes with its component alone, and a change to what satisfies one port stops there.
 
-This improves **testability for everyone** since one test adapter, passed to the constructor, observes and drives everything the module does outside itself.
+This improves **testability for everyone** since a fake passed to each port observes and drives everything the component does outside itself, and each dependency is faked on its own.
 
-### 2. The port and configuration go in the constructor, not the interface
+### 2. Ports and configuration go in the constructor, not the interface
 
-Anything that changes the behaviour of an entity is passed to its constructor: as the port if it is an interface, as configuration if it is a value.
+Anything that changes the behaviour of an entity is passed to its constructor: as a port if it is an interface, as configuration if it is a value.
 
 - **The interface takes only data.** A method on the interface takes data carriers and plain values supplied by the caller. It never takes a port or a configuration value.
+- **Except what a foreign interface hands in.** An inbound edge component's interface is foreign, and the framework passes what it passes with each call: a request, a socket, a set of background tasks. Those belong to the foreign interface. They are used only in the humble shell, and never carry the component's dependencies, which still arrive through its constructor rather than through the framework's own injection.
 
-This improves **leverage for callers** since the interface for the module stays simpler, increasing the capability per unit of complexity in the interface.
+This improves **leverage for callers** since the interface for the component stays simpler, increasing the capability per unit of complexity in the interface.
 
 This improves **locality for maintainers** since the behaviour of an entity is decided in one place, where it is constructed.
 
@@ -50,20 +51,21 @@ This improves **testability for everyone** since every behaviour can be measured
 
 ### 3. A constructor accepts what it needs, and reaches no resource
 
-A constructor never creates what it needs and never fetches it. Neither the constructor nor the implementation constructs an adapter, reads an environment variable, reads the clock or opens a connection: each of those arrives through the constructor. An adapter reaches its resource when it is called, never while it is being constructed.
+A constructor never creates what it needs and never fetches it. Neither the constructor nor the implementation constructs another component or an adapter, reads an environment variable, reads the clock or opens a connection: each of those arrives through the constructor.
+
+A resource is acquired by whoever owns its lifetime. One that lives for a single use, such as a call, a session or a conversation, is acquired by the component whose behaviour defines that use, through what its constructor took, when it is called: never while it is being constructed. A component with a lifecycle opens sessions through its interface, and the session holds the resource. One that lives as long as the process is acquired by the entrypoint and passed in.
+
+When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
 
 This improves **testability for everyone** since constructing any entity is safe in a test, and only a call shows what reaches a resource.
 
 ## The factory
 
-A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. There are two kinds:
-
-- **A module factory** builds a module: it gets an adapter for the module's port and calls the module's constructor.
-- **An adapter factory** builds an adapter: it builds the library objects the adapter's constructor takes, gets every other entity from that entity's factory, and calls the adapter's constructor. Every adapter has one, even an adapter with nothing to build but itself.
+A factory is code that calls an entity's constructor and returns the entity. It is never the constructor itself: the constructor accepts what the entity needs, and the factory supplies it. A factory builds a component, an edge component included, or an adapter.
 
 ### 4. A factory returns the interface
 
-A module factory declares its return type as the interface of the module. An adapter factory declares its return type as the port the adapter satisfies. Neither returns the implementation.
+A factory for a component declares its return type as the component's interface: for an inbound edge component, that is the foreign interface it presents, such as a router. A factory for an adapter declares its return type as the port's interface or the contract it satisfies. Neither returns the implementation.
 
 This improves **leverage for callers** since a caller of the factory learns only the interface.
 
@@ -71,15 +73,19 @@ This improves **locality for maintainers** since the implementation can be renam
 
 ### 5. A factory only wires
 
-A factory calls constructors and other factories, and returns what it built. It does nothing else. Anything worth testing belongs in a module or an adapter.
+A factory calls constructors and other factories, builds the library objects an edge component takes, and returns what it built. It does nothing else. Anything worth testing belongs in a component or an adapter.
 
-What a factory takes is a design decision that depends on its use case. It may take nothing, parameters that select between choices, configuration values, adapters, entities of other modules, or anything else. Whether it builds a new entity on every call or returns one it has kept is a design decision too.
+What a factory takes is a design decision that depends on its use case. It may take nothing, parameters that select between choices, configuration values, other entities, or anything else. How it gets the other entities it needs, by calling their factories, calling their constructors or taking them as parameters, is a design decision too, and so is whether it builds a new entity on every call or returns one it has kept.
 
-This improves **testability for everyone** since every behaviour sits behind a constructor, where a test can reach it with test adapters.
+This improves **testability for everyone** since every behaviour sits behind a constructor, where a test can reach it with fakes.
 
 ### 6. A factory reaches no resource
 
-A factory never reads an environment variable, reads a settings file or opens a connection, and so it is synchronous: a factory that has to wait on something is reaching for a resource. A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the startup code, a settings loader, a test — is a design decision.
+A factory never reads an environment variable, reads a settings file or opens a connection, and so it is synchronous: a factory that has to wait on something is reaching for a resource.
+
+- **Building is not reaching.** A library object that reaches its resource only when called, such as an HTTP client or a model provider's SDK client, can be built in a factory.
+- **A library's defaults are not a way round.** A library that reads a value from the environment when it is not given one, as many SDKs do for an API key, is reaching the environment on the factory's behalf. A factory passes every such value explicitly, as a parameter.
+- **What lives as long as the process is acquired outside.** A value or a connection that comes from the environment is acquired by whatever calls the factory, and passed in as a parameter. Which code that is — the entrypoint, a settings loader, a test — is a design decision.
 
 This improves **locality for maintainers** since how the program is wired and how it reads its environment change independently.
 
@@ -87,22 +93,23 @@ This improves **testability for everyone** since a factory can be called with an
 
 ### 7. One constructor, many factories
 
-An entity has a single constructor. Each factory is one way of supplying it: one per choice of adapters, or one per environment. A new way of building a module or an adapter is a new factory, never a second constructor and never a change to the interface.
+An entity has a single constructor. Each factory is one way of supplying it: one per choice of what satisfies its ports, or one per environment. A new way of building a component or an adapter is a new factory, never a second constructor and never a change to the interface.
 
-This improves **flexibility for designers** since a new combination of adapters is added without touching the module.
+This improves **flexibility for designers** since a new combination of dependencies is added without touching the component.
 
-### 8. A factory calls one entity's constructor, and gets everything else from factories
+### 8. A composite is a factory
 
-A factory calls the constructor of the entity it builds and, for an adapter, builds the library objects the adapter takes. Every other entity it needs comes from that entity's factory or as a parameter.
+A composite presents an assembly of components and adapters as one component. It is a factory: its parameters are the composite's ports, which it passes to the components inside, and it returns one interface, the interface of the component it presents. Everything else it builds stays hidden from its callers, who see one more component with one interface and its ports.
 
-- A module factory never calls an adapter's constructor. It calls the adapter's factory.
-- A factory never calls another module's constructor. It calls one of that module's factories, or takes the entity as a parameter.
+A composite follows every rule for factories: it only wires, reaches no resource and returns the interface. It has no constructor of its own, because it is not an entity with behaviour: the behaviour belongs to the components inside.
 
-This improves **locality for maintainers** since the knowledge of how an entity is built stays with that entity's factories: a module factory chooses adapters without knowing what they are made of.
+This improves **leverage for callers** since a whole assembly is used through one interface, and a caller learns only the ports it must satisfy.
+
+This improves **locality for maintainers** since the inside of a composite can be rewired without touching anything that uses it.
 
 ## Language idioms
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor`, a `create_order_processor` module factory and a `create_stripe_adapter` adapter factory
-- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor`, a `createOrderProcessor` module factory and a `createStripeAdapter` adapter factory
+- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `create_order_processor` factory, and a `create_research_team` composite
+- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `createOrderProcessor` factory, and a `createResearchTeam` composite

@@ -9,83 +9,53 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 | **Package** | a directory with an `__init__.py` |
 | **Export file** | the package's `__init__.py`, re-exporting names and listing them in `__all__` |
 | **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
-| **Domain package** | `core/domain`, with one file per concept — `core/domain/currency.py`, `core/domain/agent_tool.py` |
-| **Domain interface** | a `typing.Protocol` in its own file in `core/domain` — `AgentTool` in `core/domain/agent_tool.py` |
-| **Module factory package** | `infrastructure/factories/modules/<module_name>`, with the factories in `factory.py` |
-| **Adapter factory package** | `infrastructure/factories/adapters/<module_name>/<adapter_name>`, or `<entrypoint_name>/<adapter_name>` for a driving adapter, or `<interface_name>/<adapter_name>` for an adapter of a domain interface, with the factories in `factory.py` |
-| **Entrypoint** | the framework or runtime that calls the program, never written in it: FastAPI, Click, Celery, or Python running a file as `__main__`, named `main` |
-| **Driving adapter** | a class in `infrastructure/adapters/<entrypoint_name>/<adapter_name>` — `Cli` in `infrastructure/adapters/main/cli/adapter.py` |
-| **Startup code** | a file in `infrastructure/startup`, one per entrypoint — `infrastructure/startup/main.py` with its `if __name__ == "__main__":` block |
+| **Contracts package** | `contracts`, with one file per concept — `contracts/currency.py`, `contracts/agent_tool.py` |
+| **Contract** | a `typing.Protocol` or a data carrier in its own file in `contracts` — `AgentTool` in `contracts/agent_tool.py` |
+| **Factory package** | `factories/components/<component_name>` or `factories/adapters/…`, with the factories in `factory.py`, and a composite in a file named for it |
+| **Entrypoint** | a file in `entrypoints` — `entrypoints/cli.py` named in `[project.scripts]`, `entrypoints/fastapi.py` whose `app` uvicorn is given |
+| **Inbound edge component** | a component whose constructor returns a framework's object — `orders_router` returning an `APIRouter` |
+| **Outbound edge component** | a component whose constructor takes a library's object — `StripePaymentsImpl` taking an `httpx.Client` |
 
-Python calls every `.py` file a "module". In these skills **module** keeps its codebase-design meaning, so this file says "file" for a `.py` file.
+The examples use `shop` as the project's package, so every path below sits under `src/shop`, and every import starts `shop.`.
+
+Python calls every `.py` file a "module". These skills say "file" for a `.py` file, and "component" for a package in `components`.
 
 Files behind the export file carry no `_` prefix. The export file decides what is public: a name is public if `__init__.py` re-exports it and lists it in `__all__`, and private otherwise.
 
-## Example 1: a module and its adapters
+## Example 1: a component and its ports
 
-An `OrderProcessor` module charges for an order through its `OrderProcessorPort`. A Stripe adapter and a PayPal adapter each satisfy that port.
+An `OrderProcessor` component charges for an order through its `payments` port, and stamps the receipt through its `clock` port.
 
 ```
-src/
-  core/
-    domain/
-      __init__.py
-      currency.py              # Currency
+src/shop/
+  contracts/
+    __init__.py
+    currency.py                # Currency
+  components/
     order_processor/
       __init__.py              # the export file
       interface.py             # OrderProcessor
-      port.py                  # OrderProcessorPort
+      ports.py                 # Payments, Clock
       data.py                  # Order, OrderItem, Receipt
       errors.py                # PaymentDeclined
       implementation.py        # OrderProcessorImpl; could be several files
-  infrastructure/
-    adapters/
-      order_processor/
-        stripe/
-          __init__.py          # the export file
-          adapter.py           # StripeAdapter: takes an httpx.Client
-        paypal/
-          __init__.py          # the export file
-          adapter.py           # PaypalAdapter: takes an httpx.Client
-      main/                    # the driving adapters of Python's __main__
-        cli/
-          __init__.py          # the export file
-          adapter.py           # Cli
-    factories/
-      modules/
-        order_processor/
-          __init__.py          # the export file
-          factory.py           # create_order_processor
-      adapters/
-        order_processor/
-          stripe/
-            __init__.py        # the export file
-            factory.py         # create_stripe_adapter
-          paypal/
-            __init__.py        # the export file
-            factory.py         # create_paypal_adapter
-        main/
-          cli/
-            __init__.py        # the export file
-            factory.py         # create_cli
-    startup/
-      main.py                  # the startup code for Python's __main__
 ```
 
-`Currency` means the same thing to every module and belongs to none, so it is in the domain package. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the module's data file:
+`Currency` was promoted to the contracts package when a second component needed it and it meant the same thing to both. `Order` and `Receipt` appear in the `OrderProcessor` interface, so they are in the component's data file:
 
 ```python
-# core/domain/currency.py
+# contracts/currency.py
 from typing import Literal
 
 type Currency = Literal["GBP", "USD", "EUR"]
 ```
 
 ```python
-# core/order_processor/data.py
+# components/order_processor/data.py
 from dataclasses import dataclass
+from datetime import datetime
 
-from core.domain.currency import Currency
+from shop.contracts.currency import Currency
 
 @dataclass(frozen=True)
 class OrderItem:
@@ -101,51 +71,58 @@ class Order:
 class Receipt:
     total: int
     currency: Currency
+    at: datetime
 ```
 
-The interface, the port, the errors and the implementation each have their own file:
+The interface, the ports, the errors and the implementation each have their own file:
 
 ```python
-# core/order_processor/interface.py
+# components/order_processor/interface.py
 from typing import Protocol
 
 from .data import Order, Receipt
 
-class OrderProcessor(Protocol): # Interface for the module
+class OrderProcessor(Protocol): # Interface for the component
     def __call__(self, order: Order) -> Receipt: ...
 ```
 
 ```python
-# core/order_processor/port.py
+# components/order_processor/ports.py
+from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
-from core.domain.currency import Currency
+from shop.contracts.currency import Currency
 
-class OrderProcessorPort(Protocol): # The module's port
+class Payments(Protocol): # The interface of the payments port
     def charge(self, amount: int, currency: Currency) -> bool: ...
+
+type Clock = Callable[[], datetime] # The interface of the clock port
 ```
 
 ```python
-# core/order_processor/errors.py
-class PaymentDeclined(Exception): # Determined by the module's implementation
+# components/order_processor/errors.py
+class PaymentDeclined(Exception): # Determined by the component's implementation
     ...
 ```
 
 ```python
-# core/order_processor/implementation.py
-from core.domain.currency import Currency
+# components/order_processor/implementation.py
+from shop.contracts.currency import Currency
 
 from .data import Order, Receipt
 from .errors import PaymentDeclined
-from .port import OrderProcessorPort
+from .ports import Clock, Payments
 
-class OrderProcessorImpl: # Implementation of the module
+class OrderProcessorImpl: # Implementation of the component
     def __init__(
         self,
-        port: OrderProcessorPort,
+        payments: Payments,
+        clock: Clock,
         currency: Currency
-    ): # Constructor for the module
-        self.port = port
+    ): # Constructor for the component
+        self.payments = payments
+        self.clock = clock
         self.currency = currency
 
     def __call__(self, order: Order) -> Receipt:
@@ -153,217 +130,110 @@ class OrderProcessorImpl: # Implementation of the module
 ```
 
 ```python
-# core/order_processor/__init__.py
+# components/order_processor/__init__.py
 from .data import Order, OrderItem, Receipt
 from .errors import PaymentDeclined
 from .implementation import OrderProcessorImpl
 from .interface import OrderProcessor
-from .port import OrderProcessorPort
+from .ports import Clock, Payments
 
 __all__ = [
+    "Clock",
     "Order",
     "OrderItem",
     "OrderProcessor",
     "OrderProcessorImpl",
-    "OrderProcessorPort",
+    "Payments",
     "PaymentDeclined",
     "Receipt",
 ]
 ```
 
-An adapter imports the port from the module's export file:
+A component imports nothing from another component, an adapter or a factory:
 
 ```python
-# infrastructure/adapters/order_processor/stripe/adapter.py
-from core.domain.currency import Currency
-from core.order_processor import OrderProcessorPort                # good: the export file
-from core.order_processor.port import OrderProcessorPort           # bad: reaches behind the export file
-from infrastructure.adapters.order_processor.paypal import ...     # bad: an adapter importing another adapter
-
-import httpx                                                       # good: the library whose client it takes
-
-class StripeAdapter(OrderProcessorPort): # Adapter for the module's port
-    def __init__(self, api_key: str, http: httpx.Client): ... # Constructor: takes the library's own client
-
-    def charge(self, amount: int, currency: Currency) -> bool: ...
+# components/order_processor/implementation.py
+from shop.components.stripe_payments import StripePaymentsImpl   # bad: a component importing another component
+from shop.factories.components.stripe_payments import ...         # bad: a component importing a factory
 ```
 
-Nothing in `core` imports from `infrastructure`:
+## Example 2: an outbound edge component and its factory
 
-```python
-# core/order_processor/implementation.py
-from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad: the core importing an adapter
+`StripePayments` faces Stripe's HTTP API. It is the only package in the project that knows Stripe's request format:
+
+```
+src/shop/
+  components/
+    stripe_payments/
+      __init__.py              # the export file
+      interface.py             # StripePayments
+      implementation.py        # StripePaymentsImpl: the humble shell, taking an httpx.Client
+      translate.py             # to_charge_form, charged: plain functions
+  factories/
+    components/
+      order_processor/
+        __init__.py
+        factory.py             # create_order_processor
+      stripe_payments/
+        __init__.py
+        factory.py             # create_stripe_payments
 ```
 
-## Example 2: the factory packages, a driving adapter and its startup code
-
-The adapter's export file exports its constructor, which is what its adapter factory needs:
-
 ```python
-# infrastructure/adapters/order_processor/stripe/__init__.py
-from .adapter import StripeAdapter
+# components/stripe_payments/implementation.py
+import httpx                                                     # good: the library whose client it takes
 
-__all__ = ["StripeAdapter"]
+from shop.contracts.currency import Currency
+
+from .translate import charged, to_charge_form
+
+class StripePaymentsImpl: # An outbound edge component
+    def __init__(self, http: httpx.Client, api_key: str): # Constructor: takes the library's own client
+        self.http = http
+        self.api_key = api_key
+
+    def charge(self, amount: int, currency: Currency) -> bool: # the humble shell
+        response = self.http.post("/v1/charges", data=to_charge_form(amount, currency), auth=(self.api_key, ""))
+        return charged(response.status_code)
 ```
 
-The adapter factory builds the library objects the adapter takes and calls its constructor. It lives under `infrastructure/factories/adapters`, at the adapter's path:
+Its factory builds the library object, and returns the interface:
 
 ```python
-# infrastructure/factories/adapters/order_processor/stripe/factory.py
+# factories/components/stripe_payments/factory.py
 import httpx
 
-from core.order_processor import OrderProcessorPort
-from infrastructure.adapters.order_processor.stripe import StripeAdapter
+from shop.components.stripe_payments import StripePayments, StripePaymentsImpl
 
-def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory: returns the port the adapter satisfies
-    return StripeAdapter(api_key, httpx.Client()) # Building the client reaches no resource: it connects when called
+def create_stripe_payments(api_key: str) -> StripePayments:
+    return StripePaymentsImpl(httpx.Client(base_url="https://api.stripe.com"), api_key) # Building reaches no resource
 ```
 
-```python
-# infrastructure/factories/adapters/order_processor/stripe/__init__.py
-from .factory import create_stripe_adapter
-
-__all__ = ["create_stripe_adapter"]
-```
-
-The module factory chooses an adapter by calling its adapter factory, and never imports from an adapter's package:
+`StripePayments` satisfies the order processor's `payments` port as it is, so the order processor's factory passes it straight to the port. There is no adapter:
 
 ```python
-# infrastructure/factories/modules/order_processor/factory.py
-from typing import Literal
+# factories/components/order_processor/factory.py
+from datetime import UTC, datetime
+from functools import partial
 
-from core.domain.currency import Currency
-from core.order_processor import OrderProcessor, OrderProcessorImpl
-from infrastructure.factories.adapters.order_processor.paypal import create_paypal_adapter
-from infrastructure.factories.adapters.order_processor.stripe import create_stripe_adapter
-from infrastructure.adapters.order_processor.stripe import StripeAdapter   # bad: a module factory reaching into an adapter's package
+from shop.components.order_processor import OrderProcessor, OrderProcessorImpl
+from shop.contracts.currency import Currency
+from shop.factories.components.stripe_payments import create_stripe_payments
 
-def create_order_processor(
-        provider: Literal["stripe", "paypal"],
-        api_key: str,
-        currency: Currency
-    ) -> OrderProcessor: # A module factory for the order processor module
-    if provider == "stripe":
-        port = create_stripe_adapter(api_key)
-    elif provider == "paypal":
-        port = create_paypal_adapter(api_key)
-    return OrderProcessorImpl(port, currency)
-```
-
-```python
-# infrastructure/factories/modules/order_processor/__init__.py
-from .factory import create_order_processor
-
-__all__ = ["create_order_processor"]
-```
-
-The entrypoint here is Python itself, running the startup file as `__main__`; the project does not write it. What it reaches is a driving adapter: `Cli` has the shape of a command, a callable given the command-line arguments. Its constructor takes the module interface it drives, and it translates between the arguments and data carriers:
-
-```python
-# infrastructure/adapters/main/cli/adapter.py
-from core.order_processor import Order, OrderItem, OrderProcessor
-
-class Cli: # A driving adapter: calls no module's constructor and no factory, imports no other adapter
-    def __init__(self, order_processor: OrderProcessor): # Its constructor takes the interface it drives
-        self.order_processor = order_processor
-
-    def __call__(self, argv: list[str]) -> None: # The shape the entrypoint calls: a command
-        order = Order(
-            id=argv[0],
-            items=tuple(OrderItem(name=f"item_{i}", cost=int(cost)) for i, cost in enumerate(argv[1:]))
-        ) # translate the outside world into a data carrier
-        receipt = self.order_processor(order)
-        print(f"total={receipt.total} {receipt.currency}")
-```
-
-Like every adapter, it has an adapter factory:
-
-```python
-# infrastructure/factories/adapters/main/cli/factory.py
-from collections.abc import Callable
-
-from core.order_processor import OrderProcessor
-from infrastructure.adapters.main.cli import Cli
-
-def create_cli(order_processor: OrderProcessor) -> Callable[[list[str]], None]: # Returns the entrypoint's port: a command
-    return Cli(order_processor)
-```
-
-The startup code reads the environment, calls the factories, and hands the driving adapter to the entrypoint. For Python's `__main__`, that means calling it with the arguments:
-
-```python
-# infrastructure/startup/main.py
-import os
-import sys
-
-from infrastructure.factories.adapters.main.cli import create_cli
-from infrastructure.factories.modules.order_processor import create_order_processor
-
-if __name__ == "__main__": # The startup code: run with `python -m infrastructure.startup.main`
-    cli = create_cli(
-        create_order_processor(
-            provider="stripe",
-            api_key=os.environ["STRIPE_API_KEY"],
-            currency="GBP"
-        )
+def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor:
+    return OrderProcessorImpl(
+        payments=create_stripe_payments(api_key),
+        clock=partial(datetime.now, UTC),
+        currency=currency,
     )
-    cli(sys.argv[1:])
 ```
 
-With a framework as the entrypoint, the startup code registers the driving adapters with it instead, and the framework defines the port. For FastAPI, a driving adapter is a function that returns an `APIRouter`, and the startup code includes each in the app:
+## Example 3: an adapter joining two components
+
+A `Checkout` component is built on top of order processing. It does not import `components/order_processor`. It declares its own data carriers and a `payment` port with the shape it needs:
 
 ```python
-# infrastructure/startup/fastapi.py
-import os
-
-from fastapi import FastAPI
-
-from infrastructure.factories.adapters.fastapi.orders_router import create_orders_router
-from infrastructure.factories.modules.order_processor import create_order_processor
-
-app = FastAPI() # The entrypoint, configured: uvicorn runs infrastructure.startup.fastapi:app
-app.include_router(
-    create_orders_router(
-        create_order_processor(provider="stripe", api_key=os.environ["STRIPE_API_KEY"], currency="GBP")
-    )
-)
-```
-
-When the entity a driving adapter drives holds one request's resources, the driving adapter takes the opening of it, and the startup code satisfies it with a module factory. A `PhoneCall` module whose entity talks to a caller over their socket is built per call:
-
-```python
-# infrastructure/adapters/fastapi/call_router/router.py
-from collections.abc import Callable
-
-from fastapi import APIRouter, WebSocket
-
-from core.phone_call import CallDetails, PhoneCall
-
-type OpenPhoneCall = Callable[[WebSocket, CallDetails], PhoneCall] # Opens the entity per request: a function returning the module's interface
-
-def call_router(*, path: str, open_call: OpenPhoneCall) -> APIRouter: # Its constructor: returns the APIRouter FastAPI calls
-    router = APIRouter()
-
-    @router.websocket(path)
-    async def call(websocket: WebSocket, ddiNo: str) -> None:
-        await open_call(websocket, CallDetails(ddi_number=ddiNo)).run()
-
-    return router
-```
-
-```python
-# infrastructure/startup/fastapi.py
-app.include_router(
-    create_call_router(path="/call", open_call=create_phone_call) # The adapter factory, given the phone call's module factory as the opener
-)
-```
-
-## Example 3: a module that needs another module
-
-A `Checkout` module is built on top of order processing. It does not import `core/order_processor`. It declares its own data carriers and a port with the shape it needs:
-
-```python
-# core/checkout/data.py
+# components/checkout/data.py
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -378,24 +248,24 @@ class Cart:
 ```
 
 ```python
-# core/checkout/port.py
+# components/checkout/ports.py
 from typing import Protocol
 
 from .data import Cart
 
-class CheckoutPort(Protocol): # The checkout module's port
+class Payment(Protocol): # The interface of checkout's payment port
     def pay(self, cart: Cart) -> int: ...
 ```
 
-An adapter under `infrastructure/adapters/checkout` satisfies the port by calling an `OrderProcessor` through its interface, translating between the two modules' data carriers:
+The order processor's interface does not satisfy that port as it is, so an adapter under `adapters/checkout/payment` satisfies it by calling the order processor, translating between the two components' data carriers:
 
 ```python
-# infrastructure/adapters/checkout/order_processor/adapter.py
-from core.checkout import Cart, CheckoutPort
-from core.order_processor import Order, OrderItem, OrderProcessor
+# adapters/checkout/payment/order_processor/adapter.py
+from shop.components.checkout import Cart, Payment
+from shop.components.order_processor import Order, OrderItem, OrderProcessor
 
-class OrderProcessorAdapter(CheckoutPort): # Adapter connecting checkout to the order processor module
-    def __init__(self, order_processor: OrderProcessor): # Constructor takes the interface, never the implementation
+class OrderProcessorAdapter(Payment): # Adapter joining checkout to the order processor
+    def __init__(self, order_processor: OrderProcessor): # Takes the interface of the component it calls
         self.order_processor = order_processor
 
     def pay(self, cart: Cart) -> int:
@@ -406,159 +276,223 @@ class OrderProcessorAdapter(CheckoutPort): # Adapter connecting checkout to the 
         return self.order_processor(order).total
 ```
 
-The adapter's factory gets an `OrderProcessor` from the order processor's module factory package and passes it to the adapter's constructor:
+```python
+# adapters/checkout/payment/order_processor/__init__.py
+from .adapter import OrderProcessorAdapter
+
+__all__ = ["OrderProcessorAdapter"]
+```
+
+Its factory lives at the same path under `factories/adapters`, and the checkout's factory uses it:
 
 ```python
-# infrastructure/factories/adapters/checkout/order_processor/factory.py
-from core.checkout import CheckoutPort
-from infrastructure.adapters.checkout.order_processor import OrderProcessorAdapter
-from infrastructure.factories.modules.order_processor import create_order_processor
+# factories/adapters/checkout/payment/order_processor/factory.py
+from shop.adapters.checkout.payment.order_processor import OrderProcessorAdapter
+from shop.components.checkout import Payment
+from shop.components.order_processor import OrderProcessor
 
-def create_order_processor_adapter(api_key: str) -> CheckoutPort: # An adapter factory for the connecting adapter
-    return OrderProcessorAdapter(create_order_processor("stripe", api_key, "GBP"))
-```
-
-The checkout module factory gets its adapter from that factory:
-
-```python
-# infrastructure/factories/modules/checkout/factory.py
-from core.checkout import Checkout, CheckoutImpl
-from infrastructure.factories.adapters.checkout.order_processor import create_order_processor_adapter
-
-def create_checkout(api_key: str) -> Checkout: # A module factory for the checkout module
-    return CheckoutImpl(create_order_processor_adapter(api_key))
-```
-
-## Example 4: the tests
-
-```
-tests/
-  unit/
-    core/
-      order_processor/
-        test_order_processor.py    # constructs OrderProcessorImpl with FakeOrderProcessorAdapter
-        adapters.py                # FakeOrderProcessorAdapter: the test adapter for this module's port
-      checkout/
-        test_checkout.py
-        adapters.py                # FakeCheckoutAdapter
-    infrastructure/
-      adapters/
-        order_processor/
-          stripe/
-            test_stripe.py         # constructs StripeAdapter with an httpx.Client on httpx.MockTransport
-        checkout/
-          order_processor/
-            test_order_processor.py  # constructs OrderProcessorAdapter with FakeOrderProcessor
-            adapters.py              # FakeOrderProcessor
-        main/
-          cli/
-            test_cli.py            # constructs Cli with FakeOrderProcessor
-            adapters.py            # FakeOrderProcessor
-  integration/
-    infrastructure/
-      adapters/
-        order_processor/
-          postgres/
-            test_postgres.py       # runs PostgresAdapter against a real database
-  e2e/
-    test_main.py                   # where the project has end-to-end tests: runs infrastructure/startup/main.py
-```
-
-A test imports the entity under test from its export file and its test adapters from beside itself:
-
-```python
-# tests/unit/core/order_processor/test_order_processor.py
-from core.order_processor import OrderProcessor, OrderProcessorImpl
-
-from .adapters import FakeOrderProcessorAdapter
-```
-
-The tests for `Checkout` do not import `FakeOrderProcessorAdapter` or anything else from the order processor's tests. `Checkout` has its own port, so its tests have their own test adapter. The two `FakeOrderProcessor` test adapters are duplicated for the same reason.
-
-## Example 5: legacy code
-
-A project has a legacy `billing.py` that already talks to Stripe. A new `OrderProcessor` module reaches it through its port, with an adapter named for it:
-
-```
-src/
-  billing.py                     # legacy code, left where it is
-  core/
-    order_processor/
-  infrastructure/
-    adapters/
-      order_processor/
-        legacy_billing/
-          __init__.py
-          adapter.py             # LegacyBillingAdapter: satisfies OrderProcessorPort by calling billing.py
-    factories/
-      adapters/
-        order_processor/
-          legacy_billing/
-            __init__.py
-            factory.py           # create_legacy_billing_adapter
+def create_order_processor_payment(order_processor: OrderProcessor) -> Payment: # Returns the port's interface
+    return OrderProcessorAdapter(order_processor)
 ```
 
 ```python
-# infrastructure/adapters/order_processor/legacy_billing/adapter.py
-import billing
+# factories/components/checkout/factory.py
+from shop.components.checkout import Checkout, CheckoutImpl
+from shop.factories.adapters.checkout.payment.order_processor import create_order_processor_payment
+from shop.factories.components.order_processor import create_order_processor
 
-from core.domain.currency import Currency
-from core.order_processor import OrderProcessorPort
-
-class LegacyBillingAdapter(OrderProcessorPort):
-    def charge(self, amount: int, currency: Currency) -> bool:
-        return billing.take_payment(amount / 100, currency) == "ok"
+def create_checkout(api_key: str) -> Checkout:
+    return CheckoutImpl(payment=create_order_processor_payment(create_order_processor(api_key, "GBP")))
 ```
 
-Legacy code that needs an `OrderProcessor` calls the factory and drives the interface:
+An adapter imports only from the export files of the components it joins:
 
 ```python
-# src/views.py, legacy code
-from infrastructure.factories.modules.order_processor import create_order_processor   # good: a module factory
-from core.order_processor import OrderProcessorImpl                                  # bad: the constructor
+# adapters/checkout/payment/order_processor/adapter.py
+from shop.components.order_processor.interface import OrderProcessor      # bad: reaches behind the export file
+from shop.components.order_processor import OrderProcessorImpl            # bad: an adapter importing a constructor
+from shop.adapters.checkout.payment.retrying import RetryingPayment       # bad: an adapter importing another adapter
+import httpx                                                              # bad: reaching a resource is an edge component's work
 ```
 
-## Example 6: a domain interface and its adapters
+## Example 4: inbound edge components and their entrypoints
 
-A `ToolRunner` module runs the tools a model calls. A tool means the same thing to every entity that uses it, so `AgentTool` is a domain interface, and every tool is an adapter of it:
+The program is started two ways: from the command line, and as a web server. Each way has an inbound edge component that its framework calls, and an entrypoint that starts it:
 
 ```
-src/
-  core/
-    domain/
-      agent_tool.py              # AgentTool: a domain interface
+src/shop/
+  components/
+    orders_cli/
+      __init__.py
+      ports.py                 # PlaceOrder
+      data.py                  # NewOrder, Placed
+      implementation.py        # orders_cli: a Click command
+    orders_router/
+      __init__.py
+      ports.py                 # PlaceOrder
+      data.py                  # NewOrder, Placed
+      bodies.py                # OrderBody, ReceiptBody: pydantic, part of the foreign interface
+      implementation.py        # orders_router: returns an APIRouter
+  adapters/
+    orders_cli/
+      place_order/
+        order_processor/       # OrderProcessorAdapter
+    orders_router/
+      place_order/
+        order_processor/       # OrderProcessorAdapter
+  entrypoints/
+    cli.py
+    fastapi.py
+```
+
+Neither has an interface file: its interface is the framework's. Its port is the project's own:
+
+```python
+# components/orders_cli/implementation.py
+import click
+
+from .data import NewOrder
+from .ports import PlaceOrder
+
+def orders_cli(place_order: PlaceOrder) -> click.Command: # Constructor: returns the shape Click runs
+    @click.command()
+    @click.argument("order_id")
+    @click.argument("costs", type=int, nargs=-1)
+    def place(order_id: str, costs: tuple[int, ...]) -> None: # the humble shell
+        placed = place_order(NewOrder(id=order_id, costs=costs))
+        if placed is None:
+            raise click.ClickException("payment declined") # handled: a failed exit is the answer
+        click.echo(f"total={placed.total} {placed.currency}")
+
+    return place
+```
+
+The two components each declare `PlaceOrder` and their own data carriers. They have the same shape, so promoting them to the contracts package is worth considering, but only if they mean the same thing to both. Until then, each has its own adapter to the order processor.
+
+Each entrypoint reads the environment, builds the assembly through factories, registers the inbound edge component with its framework, and starts it:
+
+```python
+# entrypoints/cli.py
+import os
+
+from shop.factories.components.orders_cli import create_orders_cli
+
+def main() -> None: # [project.scripts] shop = "shop.entrypoints.cli:main"
+    cli = create_orders_cli(api_key=os.environ["STRIPE_API_KEY"], currency="GBP")
+    cli() # starts Click
+```
+
+```python
+# entrypoints/fastapi.py
+import os
+
+from fastapi import FastAPI
+
+from shop.factories.components.orders_router import create_orders_router
+
+app = FastAPI() # uvicorn runs shop.entrypoints.fastapi:app
+app.include_router(create_orders_router(api_key=os.environ["STRIPE_API_KEY"], currency="GBP"))
+```
+
+The factory of an inbound edge component returns its foreign interface:
+
+```python
+# factories/components/orders_router/factory.py
+from fastapi import APIRouter
+
+from shop.components.orders_router import orders_router
+from shop.contracts.currency import Currency
+from shop.factories.adapters.orders_router.place_order.order_processor import create_order_processor_place_order
+from shop.factories.components.order_processor import create_order_processor
+
+def create_orders_router(api_key: str, currency: Currency) -> APIRouter:
+    return orders_router(create_order_processor_place_order(create_order_processor(api_key, currency)))
+```
+
+When what an inbound edge component calls holds one request's resources, its port is an opener: a function that returns the interface. A `PhoneCall` component talks to a caller for the length of a call, over a line the router presents in the project's own shape. The `WebSocket` belongs to FastAPI's foreign interface, so it never leaves the router:
+
+```python
+# components/call_router/ports.py
+from collections.abc import Callable
+from typing import Protocol
+
+class Line(Protocol): # The project's shape for a caller's connection
+    async def say(self, audio: bytes) -> None: ...
+    async def hear(self) -> bytes: ...
+
+class Call(Protocol):
+    async def run(self) -> None: ...
+
+type OpenCall = Callable[[Line, CallDetails], Call] # The port: opens a call per request
+```
+
+```python
+# components/call_router/implementation.py
+from fastapi import APIRouter, WebSocket
+
+def call_router(*, path: str, open_call: OpenCall) -> APIRouter:
+    router = APIRouter()
+
+    @router.websocket(path)
+    async def call(websocket: WebSocket, ddiNo: str) -> None: # the humble shell
+        await websocket.accept()
+        await open_call(WebSocketLine(websocket), CallDetails(ddi_number=ddiNo)).run()
+
+    return router
+
+class WebSocketLine: # presents the foreign socket as the project's Line
+    def __init__(self, websocket: WebSocket):
+        self.websocket = websocket
+
+    async def say(self, audio: bytes) -> None:
+        await self.websocket.send_bytes(audio)
+
+    async def hear(self) -> bytes:
+        return await self.websocket.receive_bytes()
+```
+
+The router's factory satisfies the opener with a factory of the phone call component:
+
+```python
+# factories/components/call_router/factory.py
+def create_call_router(model: RealtimeModel) -> APIRouter:
+    return call_router(path="/call", open_call=lambda line, details: create_phone_call(model, line, details))
+```
+
+## Example 5: a contract and its adapters
+
+A `ToolRunner` component runs the tools a model calls. A tool means the same thing to every entity that uses it, so `AgentTool` is a contract. The tool runner's `tools` port takes a sequence of them:
+
+```
+src/shop/
+  contracts/
+    agent_tool.py              # AgentTool: a contract
+  components/
     tool_runner/
-      port.py                    # ToolRunnerPort: tools(), using AgentTool
-  infrastructure/
+      implementation.py        # ToolRunnerImpl(tools: Sequence[AgentTool])
+  adapters/
+    agent_tool/                # the adapters of the AgentTool contract
+      order_processor/
+        adapter.py             # PlaceOrderTool: places an order through the OrderProcessor component
+      truncated/
+        adapter.py             # TruncatedTool: a decorator, shortening what a tool returns
+  factories/
     adapters/
-      agent_tool/                # the adapters of the AgentTool domain interface
-        order_processor/
-          adapter.py             # PlaceOrderTool: places an order through the OrderProcessor module
-          params.py              # PlaceOrderParams: the pydantic model of its arguments
-        structured/
-          adapter.py             # StructuredTool: validates arguments against a pydantic model
-      tool_runner/
-        toolset/
-          adapter.py             # Toolset: offers the runner the tools it is given
-    factories/
-      adapters/
-        agent_tool/
-          order_processor/       # create_place_order_tool
-          structured/            # create_structured_tool
-        tool_runner/
-          toolset/               # create_toolset
-      modules/
-        tool_runner/             # create_tool_runner
+      agent_tool/
+        order_processor/       # create_place_order_tool
+        truncated/             # create_truncated_tool
+    components/
+      tool_runner/             # create_tool_runner
 ```
 
-The domain interface has a shape and no behaviour. The module's one port uses it:
+The contract has a shape and no behaviour:
 
 ```python
-# core/domain/agent_tool.py
+# contracts/agent_tool.py
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-class AgentTool(Protocol): # A domain interface: the same meaning to every entity that uses it
+class AgentTool(Protocol): # A contract: the same meaning to every entity that uses it
     @property
     def name(self) -> str: ...
     @property
@@ -569,31 +503,31 @@ class AgentTool(Protocol): # A domain interface: the same meaning to every entit
 ```
 
 ```python
-# core/tool_runner/port.py
+# components/tool_runner/implementation.py
 from collections.abc import Sequence
-from typing import Protocol
 
-from core.domain.agent_tool import AgentTool
+from shop.contracts.agent_tool import AgentTool
 
-class ToolRunnerPort(Protocol): # The module's one port; it uses the domain interface
-    def tools(self) -> Sequence[AgentTool]: ...
+class ToolRunnerImpl:
+    def __init__(self, tools: Sequence[AgentTool]): # A port typed by a contract, taking several implementations
+        self.tools = {tool.name: tool for tool in tools}
 ```
 
-Each tool is an adapter of the domain interface, under `infrastructure/adapters/agent_tool`. One connects the order processor module, so it is named for that module:
+Each tool is an adapter of the contract, under `adapters/agent_tool`. One joins the order processor component, so it is named for it:
 
 ```python
-# infrastructure/adapters/agent_tool/order_processor/adapter.py
+# adapters/agent_tool/order_processor/adapter.py
 from typing import Any
 
-from core.domain.agent_tool import AgentTool
-from core.order_processor import Order, OrderItem, OrderProcessor
+from shop.components.order_processor import Order, OrderItem, OrderProcessor
+from shop.contracts.agent_tool import AgentTool
 
-class PlaceOrderTool(AgentTool): # An adapter of the domain interface, connecting the order processor module
+class PlaceOrderTool(AgentTool): # An adapter of the contract, joining the order processor component
     name = "place_order"
     description = "Place the caller's order."
     parameters = {"type": "object", "properties": {"id": {"type": "string"}, "costs": {"type": "array"}}}
 
-    def __init__(self, order_processor: OrderProcessor): # Takes the module's interface, never its implementation
+    def __init__(self, order_processor: OrderProcessor): # Takes the component's interface, never its implementation
         self.order_processor = order_processor
 
     async def execute(self, arguments: dict[str, Any]) -> str:
@@ -605,21 +539,19 @@ class PlaceOrderTool(AgentTool): # An adapter of the domain interface, connectin
         return f"Charged {receipt.total} {receipt.currency}."
 ```
 
-A generic adapter of the same interface is reused by wrapping, never by importing. `StructuredTool` validates the arguments against a pydantic model, then passes them to the tool it wraps:
+A decorator of the contract is reused by wrapping, never by importing:
 
 ```python
-# infrastructure/adapters/agent_tool/structured/adapter.py
+# adapters/agent_tool/truncated/adapter.py
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from shop.contracts.agent_tool import AgentTool
 
-from core.domain.agent_tool import AgentTool
-
-class StructuredTool(AgentTool): # A generic adapter of the domain interface
-    def __init__(self, params: type[BaseModel], inner: AgentTool): # The tool it wraps, typed as the interface
-        self.params = params
+class TruncatedTool(AgentTool): # A decorator of the contract
+    def __init__(self, inner: AgentTool, max_chars: int): # Takes the interface it satisfies
         self.inner = inner
+        self.max_chars = max_chars
 
     @property
     def name(self) -> str:
@@ -631,44 +563,167 @@ class StructuredTool(AgentTool): # A generic adapter of the domain interface
 
     @property
     def parameters(self) -> Mapping[str, Any]:
-        return self.params.model_json_schema() # The schema comes from the model, not the inner tool
+        return self.inner.parameters
 
     async def execute(self, arguments: dict[str, Any]) -> str:
-        try:
-            valid = self.params.model_validate(arguments)
-        except ValidationError as error:
-            return error.json() # handled: the model reads which arguments to correct
-        return await self.inner.execute(valid.model_dump())
+        return (await self.inner.execute(arguments))[: self.max_chars]
 ```
 
-The factories combine them. A tool's factory gets the generic adapter from its factory, and the module factory gets the toolset from its own:
+The factories combine them:
 
 ```python
-# infrastructure/factories/adapters/agent_tool/order_processor/factory.py
-from core.domain.agent_tool import AgentTool
-from core.order_processor import OrderProcessor
-from infrastructure.adapters.agent_tool.order_processor import PlaceOrderParams, PlaceOrderTool
-from infrastructure.factories.adapters.agent_tool.structured import create_structured_tool
+# factories/adapters/agent_tool/order_processor/factory.py
+from shop.adapters.agent_tool.order_processor import PlaceOrderTool
+from shop.components.order_processor import OrderProcessor
+from shop.contracts.agent_tool import AgentTool
+from shop.factories.adapters.agent_tool.truncated import create_truncated_tool
 
-def create_place_order_tool(order_processor: OrderProcessor) -> AgentTool: # Returns the domain interface it satisfies
-    return create_structured_tool(params=PlaceOrderParams, inner=PlaceOrderTool(order_processor))
+def create_place_order_tool(order_processor: OrderProcessor) -> AgentTool: # Returns the contract it satisfies
+    return create_truncated_tool(inner=PlaceOrderTool(order_processor), max_chars=2_000)
 ```
 
 ```python
-# infrastructure/factories/modules/tool_runner/factory.py
-from core.order_processor import OrderProcessor
-from core.tool_runner import ToolRunner, ToolRunnerImpl
-from infrastructure.factories.adapters.agent_tool.order_processor import create_place_order_tool
-from infrastructure.factories.adapters.tool_runner.toolset import create_toolset
+# factories/components/tool_runner/factory.py
+from shop.components.order_processor import OrderProcessor
+from shop.components.tool_runner import ToolRunner, ToolRunnerImpl
+from shop.factories.adapters.agent_tool.order_processor import create_place_order_tool
 
 def create_tool_runner(order_processor: OrderProcessor) -> ToolRunner:
-    return ToolRunnerImpl(create_toolset([create_place_order_tool(order_processor)]))
+    return ToolRunnerImpl(tools=[create_place_order_tool(order_processor)])
 ```
 
-The tests for `ToolRunner` pass a fake port returning fake `AgentTool`s; each tool adapter is tested on its own, through the domain interface, under `tests/unit/infrastructure/adapters/agent_tool/<adapter_name>`.
+## Example 6: the tests
+
+```
+tests/
+  unit/
+    components/
+      order_processor/
+        test_order_processor.py    # constructs OrderProcessorImpl with FakePayments and a fixed clock
+        fakes.py                   # FakePayments: the fake for this component's payments port
+      checkout/
+        test_checkout.py
+        fakes.py                   # FakePayment
+      stripe_payments/
+        test_stripe_payments.py    # constructs StripePaymentsImpl with an httpx.Client on httpx.MockTransport
+      orders_router/
+        test_orders_router.py      # drives orders_router through FastAPI's TestClient
+        fakes.py                   # FakePlaceOrder
+    adapters/
+      checkout/
+        payment/
+          order_processor/
+            test_order_processor.py  # constructs OrderProcessorAdapter with FakeOrderProcessor
+            fakes.py                 # FakeOrderProcessor
+      agent_tool/
+        truncated/
+          test_truncated.py        # constructs TruncatedTool with a FakeAgentTool
+          fakes.py
+  integration/
+    components/
+      postgres_orders/
+        test_postgres_orders.py    # runs PostgresOrders against a real database
+  e2e/
+    test_cli.py                    # where the project has end-to-end tests: runs entrypoints/cli.py
+```
+
+A test imports the entity under test from its export file and its fakes from beside itself:
+
+```python
+# tests/unit/components/order_processor/test_order_processor.py
+from shop.components.order_processor import OrderProcessor, OrderProcessorImpl
+
+from .fakes import FakePayments
+```
+
+The tests for `Checkout` do not import `FakePayments` or anything else from the order processor's tests. `Checkout` has its own ports, so its tests have their own fakes. The two `FakeOrderProcessor` fakes are duplicated for the same reason.
+
+## Example 7: legacy code
+
+A project has a legacy `billing.py` that already talks to Stripe. A new `OrderProcessor` component reaches it through its `payments` port, satisfied by an outbound edge component that faces the legacy code:
+
+```
+src/shop/
+  billing.py                     # legacy code, left where it is
+  components/
+    order_processor/
+    legacy_billing/
+      __init__.py
+      interface.py               # LegacyBilling
+      implementation.py          # LegacyBillingImpl: calls billing.py
+  factories/
+    components/
+      legacy_billing/
+        factory.py               # create_legacy_billing
+```
+
+```python
+# components/legacy_billing/implementation.py
+from shop import billing                                  # good: the legacy code this edge component faces
+from shop.contracts.currency import Currency
+
+class LegacyBillingImpl:
+    def charge(self, amount: int, currency: Currency) -> bool:
+        return billing.take_payment(amount / 100, currency) == "ok"
+```
+
+Legacy code that needs an `OrderProcessor` calls its factory and uses its interface:
+
+```python
+# src/shop/views.py, legacy code
+from shop.factories.components.order_processor import create_order_processor   # good: a factory
+from shop.components.order_processor import OrderProcessorImpl                 # bad: the constructor
+```
+
+A task that changes how `billing.py` rounds amounts changes it in place. A task that rewrites how payments are taken may move that behaviour into a `stripe_payments` component, leaving `billing.py` calling its factory, as far as the change needs and no further.
 
 ## Checking the rules
 
-[import-linter](https://import-linter.readthedocs.io/) can enforce the import rules: a `layers` contract places `infrastructure` above `core`, a `forbidden` contract stops `core.domain` importing from any module's package, and an `independence` contract stops the packages of modules importing each other. A `forbidden` contract with `include_external_packages` can also stop `core` importing any third-party library.
+[import-linter](https://import-linter.readthedocs.io/) can enforce the import rules:
 
-import-linter works on files, not names, so it cannot tell an import of `OrderProcessorImpl` from an import of `OrderProcessor`. Ruff's `banned-api` setting (rule `TID251`) can: ban each constructor by its full name, `core.order_processor.OrderProcessorImpl`, and switch the rule off with `per-file-ignores` for `src/infrastructure/factories/modules/` and `tests/`. Ban each adapter's constructor the same way, with the rule switched off for `src/infrastructure/factories/adapters/` and `tests/`.
+```ini
+[importlinter]
+root_package = shop
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Imports point inward
+type = layers
+layers =
+    shop.entrypoints
+    shop.factories
+    shop.adapters
+    shop.components
+    shop.contracts
+
+[importlinter:contract:independent-components]
+name = Components never import each other
+type = independence
+modules =
+    shop.components.order_processor
+    shop.components.stripe_payments
+    shop.components.checkout
+    shop.components.orders_router
+
+[importlinter:contract:contracts-are-pure]
+name = Contracts import nothing foreign
+type = forbidden
+source_modules =
+    shop.contracts
+forbidden_modules =
+    httpx
+    fastapi
+    pydantic
+
+[importlinter:contract:stripe-at-the-edge]
+name = Only the edge component facing Stripe's API uses httpx
+type = forbidden
+source_modules =
+    shop.components.order_processor
+    shop.components.checkout
+    shop.adapters
+forbidden_modules =
+    httpx
+```
+
+import-linter works on files, not names, so it cannot tell an import of `OrderProcessorImpl` from an import of `OrderProcessor`. Ruff's `banned-api` setting (rule `TID251`) can: ban each constructor by its full name, `shop.components.order_processor.OrderProcessorImpl`, and switch the rule off with `per-file-ignores` for `src/shop/factories/` and `tests/`. Ban each adapter's constructor the same way.
