@@ -6,19 +6,13 @@ My personal AI coding agent skills, following the [Agent Skills](https://agentsk
 
 ### Engineering
 
-A prerequisite chain — install together:
+- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — designing a program as an assembly: components with one interface and a port per dependency, adapters joining them, contracts, foreign components met only by inbound and outbound edge components, views, entrypoints, factories, composites, and how errors cross an interface. One vocabulary, with a file for each topic built on it:
+  - **[dependency-injection](skills/engineering/codebase-design/dependency-injection.md)** — how entities get their dependencies: a constructor takes a component's ports and configuration and reaches no resource; factories and composites only wire, return the interface, and reach no resource.
+  - **[testing](skills/engineering/codebase-design/testing.md)** — testing entities through their constructors and interfaces: one behaviour per test, a fake for every port, foreign components through their own test hooks, unit tests by default.
+  - **[test-driven-development](skills/engineering/codebase-design/test-driven-development.md)** — driving development through tests: the red → green → refactor loop, one behaviour per cycle.
+  - **[project-structure](skills/engineering/codebase-design/project-structure.md)** — where code lives on disk: components, adapters under the port or contract they satisfy, promoted contracts, factories and entrypoints each in their own directory, imports pointing inward, tests mirroring the source tree, legacy code met as a foreign component and moved only along the path of a task.
 
-- **[codebase-design](skills/engineering/codebase-design/SKILL.md)** — shared vocabulary for designing a program as an assembly: components with one interface and a port per dependency, adapters joining them, contracts, foreign components met only by inbound and outbound edge components, views, entrypoints, factories, composites, and how errors cross an interface.
-- **[dependency-injection](skills/engineering/dependency-injection/SKILL.md)** — how entities get their dependencies: a constructor takes a component's ports and configuration and reaches no resource; factories and composites only wire, return the interface, and reach no resource. *Requires codebase-design.*
-
-Testing:
-
-- **[testing](skills/engineering/testing/SKILL.md)** — testing entities through their constructors and interfaces: one behaviour per test, a fake for every port, foreign components through their own test hooks, unit tests by default. *Requires codebase-design.*
-- **[test-driven-development](skills/engineering/test-driven-development/SKILL.md)** — driving development through tests: the red → green → refactor loop, one behaviour per cycle. *Requires codebase-design, testing and project-structure.*
-
-Structure:
-
-- **[project-structure](skills/engineering/project-structure/SKILL.md)** — where code lives on disk: components, adapters under the port or contract they satisfy, promoted contracts, factories and entrypoints each in their own directory, imports pointing inward, tests mirroring the source tree, legacy code met as a foreign component and moved only along the path of a task. *Requires codebase-design and testing.*
+  Python and TypeScript idioms for every topic live in `python/` and `typescript/` beside them.
 
 ### Utils
 

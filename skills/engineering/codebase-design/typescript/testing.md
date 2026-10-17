@@ -1,6 +1,6 @@
 # Testing in TypeScript
 
-The sections in [SKILL.md](SKILL.md) are language-agnostic. This file is its TypeScript spelling. The vocabulary's TypeScript shapes — interfaces, function types, object literals — live in [codebase-design's typescript.md](../codebase-design/typescript.md).
+The sections in [testing.md](../testing.md) are language-agnostic. This file is its TypeScript spelling. The vocabulary's TypeScript shapes — interfaces, function types, object literals — live in [typescript/codebase-design.md](codebase-design.md).
 
 ## What makes a good test
 

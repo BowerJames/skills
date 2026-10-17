@@ -1,6 +1,6 @@
 # Codebase Design in TypeScript
 
-The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its TypeScript spelling.
+The vocabulary in [SKILL.md](../SKILL.md) is language-agnostic. This file is its TypeScript spelling.
 
 The style throughout: **no classes**. Entities are functions and object literals returned by their constructors; they satisfy an `interface` structurally. The one exception is an error: a subclass of `Error`.
 

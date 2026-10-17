@@ -1,6 +1,6 @@
 # Codebase Design in Python
 
-The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Python spelling.
+The vocabulary in [SKILL.md](../SKILL.md) is language-agnostic. This file is its Python spelling.
 
 ## Vocabulary → Python
 

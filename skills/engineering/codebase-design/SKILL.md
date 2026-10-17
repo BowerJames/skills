@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Shared vocabulary for designing simple, flexible, maintainable codebases as components joined by adapters. Use when the user wants to design or implement changes in the codebase.
+description: Designing, wiring, testing and laying out simple, flexible, maintainable codebases as components joined by adapters, with one shared vocabulary for dependency injection, testing, test-driven development and project structure. Use when the user wants to design or implement changes in the codebase, such as creating or changing components, adapters, factories or entrypoints, wiring dependencies, writing or structuring tests, test-driving a change, deciding where code belongs, or adding code to a codebase that does not follow this structure yet.
 ---
 
 # Codebase Design
@@ -13,6 +13,15 @@ The aim is to provide:
 - locality for maintainers
 - flexibility for designers
 - testability for everyone.
+
+## Topics
+
+This file holds the vocabulary and principles. Each topic file builds on them; read the one for the work at hand:
+
+- **[dependency-injection](dependency-injection.md)** — how entities get their dependencies: what a constructor receives, and the factories and composites that call it. Read it when wiring dependencies, deciding whether a dependency belongs in a component's constructor or its interface, writing or changing a factory or a composite, or fixing components that create or fetch what they need.
+- **[testing](testing.md)** — testing entities through their constructors and interfaces: one behaviour per test, a fake for every port, foreign components through their own test hooks, unit tests by default. Read it when writing or structuring tests, deciding what to test, passing fakes for ports, testing edge components against foreign components, or fixing tests that break under refactor.
+- **[test-driven-development](test-driven-development.md)** — driving development through tests: the red → green → refactor loop, one behaviour per cycle, the constructor, interface and ports evolving with the tests. Read it when adding, enhancing or amending components, edge components or adapters.
+- **[project-structure](project-structure.md)** — where code lives on disk: components, adapters, contracts, factories and entrypoints each in their own directory, imports pointing inward, tests mirroring the source tree, legacy code met as a foreign component. Read it when creating components, adapters, contracts, factories, entrypoints or tests, deciding where code belongs, or adding code to a codebase that does not follow this structure yet.
 
 ## Glossary
 
@@ -83,7 +92,7 @@ _Avoid_: external component (external already describes a composite's ports, see
 
 _Avoid_: wrapper port, adapter port (a view is not a port: no behaviour of the project's sits behind it).
 
-**Entrypoint** — the code the outside world is pointed at to start the program: a script, a server's app object, the file a worker loads. It reads the environment, acquires the resources whose lifetime is the process, calls the factories that build the assembly, registers the inbound edge components with the foreign components that call them, starts those foreign components, and closes what it acquired. It holds no behaviour. A program has one for each way it is started; a library has none.
+**Entrypoint** — the code the outside world is pointed at to start the program: a script, a server's app object, the file a worker loads. It reads the environment, acquires the resources whose lifetime is the process, such as secrets, settings and connection pools, calls the factories that build the assembly, registers the inbound edge components with the foreign components that call them, starts those foreign components, and closes what it acquired. It holds no behaviour. A program has one for each way it is started; a library has none.
 
 _Avoid_: startup, bootstrap, composition root, main (one entrypoint among several).
 
@@ -123,7 +132,12 @@ Split behaviour out into its own component when one of these holds:
 - **It must be swappable.** The component that uses it should work with more than one version of it, each passed to the same port.
 - **It faces a foreign component.** Code that calls a library which reaches a resource, or that a framework calls, is an edge component, so the components behind it never meet the foreign interface.
 
-Watch for code shared between adapters: it is often the first sign of one of these reasons. Behaviour that several adapters need may want to be a component they receive through their constructors, rather than code they each copy or import.
+**Watch for code shared between adapters.** It is not forbidden, but it is often the first sign of one of these reasons. Before sharing, ask what the code is:
+
+- **Behaviour, including the translation of a provider's format**, is usually a component, passed to the constructors of the adapters that need it, rather than code they each copy or import.
+- **Something too small for a component**, a line of formatting or a constant, is often best left as two copies, especially when they are likely to change apart.
+
+When neither fits, sharing is a judgement call. Where the shared code goes is covered by [project-structure](project-structure.md#8-name-a-package-for-what-it-is-not-for-being-shared).
 
 ## Principles
 
@@ -175,7 +189,7 @@ Good entities make testing natural:
 
 ## Language idioms
 
-The vocabulary above is language-agnostic. When implementing, read the file for the target language:
+The vocabulary above, and every topic file, is language-agnostic. Each language has a directory with one file per topic, and each topic file links to its own. When implementing, start with the vocabulary file for the target language:
 
-- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
-- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
+- [python/codebase-design.md](python/codebase-design.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
+- [typescript/codebase-design.md](typescript/codebase-design.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions

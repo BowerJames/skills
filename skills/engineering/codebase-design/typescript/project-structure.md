@@ -1,6 +1,6 @@
 # Project Structure in TypeScript
 
-The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their TypeScript spelling.
+The rules in [project-structure.md](../project-structure.md) are language-agnostic. This file is their TypeScript spelling.
 
 ## Vocabulary â†’ TypeScript
 
@@ -20,7 +20,7 @@ The style throughout is **no classes**. A constructor is a function named `newâ€
 
 The examples put the project under `src/`, so every path below that does not start with `tests/` sits under `src`. Imports are relative.
 
-**Package** here is a directory in one project, not an npm package. Node calls every file an ES module; these skills say "file" for a `.ts` file, and "component" for a package in `components`.
+**Package** here is a directory in one project, not an npm package. Node calls every file an ES module; this skill says "file" for a `.ts` file, and "component" for a package in `components`.
 
 Directories and files are kebab-case, so `<component_name>` and `<port_name>` in the rules are spelled `order-processor` and `place-order`; in its constructor the port is named `placeOrder`.
 

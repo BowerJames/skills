@@ -1,17 +1,10 @@
----
-name: dependency-injection
-description: Discipline for how entities get their dependencies; what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a component's constructor or its interface, writing or changing a factory or a composite, or fixing components that create or fetch what they need. Requires the codebase-design skill.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, behaviour, implementation, constructor, port, configuration, adapter, decorator, contract, foreign component, edge component, view, entrypoint, factory, composite, assembly, data carrier, resource) exactly.
-
 # Dependency Injection
+
+This file uses the vocabulary of [codebase-design](SKILL.md) exactly.
 
 Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a component receives what satisfies each of its **Ports**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: it chooses what satisfies each port and calls the constructor. The aim is that every resource sits behind a port or a foreign object passed to an edge component, every dependency is declared in a constructor, the **Interface** carries only data, and nothing reaches a resource while the **Assembly** is being built.
 
-Where factories live on disk is covered by [project-structure](../project-structure/SKILL.md).
+Where factories live on disk is covered by [project-structure](project-structure.md).
 
 ## The constructor
 
@@ -28,7 +21,7 @@ Data carriers and configuration have no implementation to swap, so they are pass
 
 An **outbound edge component**'s constructor also takes its foreign dependency: the library's own object (an `httpx.Client`, a model provider's SDK client), or a view of it where the library offers no test hook. It is the one place a foreign object appears in a constructor.
 
-An **adapter**'s constructor takes the interfaces of the components it calls, contracts and configuration. It never takes a port's interface, except a **decorator**, which takes the very interface it satisfies. It takes no foreign object: anything with behaviour behind it that it needs is a component or a contract, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An **adapter**'s constructor takes the interfaces of the components it calls, contracts and configuration. It never takes a port's interface, except a **decorator**, which takes the very interface it satisfies, and it takes no foreign object: what else it needs follows from an adapter defining no port of its own, in [Relationships](SKILL.md#relationships). Like every constructor, it must take everything required to measure the adapter's behaviours.
 
 This improves **flexibility for designers** since a new component or adapter passed to a port adds a capability without touching the component, and each port can be swapped on its own.
 
@@ -53,7 +46,7 @@ This improves **testability for everyone** since every behaviour can be measured
 
 A constructor never creates what it needs and never fetches it. Neither the constructor nor the implementation constructs another component or an adapter, reads an environment variable, reads the clock or opens a connection: each of those arrives through the constructor.
 
-A resource is acquired by whoever owns its lifetime. One that lives for a single use, such as a call, a session or a conversation, is acquired by the component whose behaviour defines that use, through what its constructor took, when it is called: never while it is being constructed. A component with a lifecycle opens sessions through its interface, and the session holds the resource. One that lives as long as the process is acquired by the entrypoint and passed in.
+Who acquires a resource follows its lifetime, as the [principles](SKILL.md#principles) set out, and it is never a constructor. A resource for a single use is acquired when the component is called, or by a session its interface opens, which then holds it. One that lives as long as the process is passed in.
 
 When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
 
@@ -111,5 +104,5 @@ This improves **locality for maintainers** since the inside of a composite can b
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `create_order_processor` factory, and a `create_research_team` composite
-- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `createOrderProcessor` factory, and a `createResearchTeam` composite
+- [python/dependency-injection.md](python/dependency-injection.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `create_order_processor` factory, and a `create_research_team` composite
+- [typescript/dependency-injection.md](typescript/dependency-injection.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `createOrderProcessor` factory, and a `createResearchTeam` composite

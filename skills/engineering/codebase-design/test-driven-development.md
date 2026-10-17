@@ -1,15 +1,6 @@
----
-name: test-driven-development
-description: Development methodology for driving development through tests. Use this when you are adding, enhancing or amending components, edge components or adapters. Requires the codebase-design, testing and project-structure skills.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, behaviour, implementation, constructor, port, configuration, adapter, edge component, factory, entrypoint, data carrier, resource).
-- **[testing](../testing/SKILL.md)** — read it first. This skill uses its vocabulary (entity under test, fake, test hook, test harness, ...).
-- **[project-structure](../project-structure/SKILL.md)** — where the files created in each cycle go.
-
 # Test-driven development
+
+This file uses the vocabulary of [codebase-design](SKILL.md) and [testing](testing.md). Where the files created in each cycle go is covered by [project-structure](project-structure.md).
 
 ## The TDD Cycle
 
@@ -42,5 +33,5 @@ The cycles build a component against fakes. Once its behaviours are pinned, what
 
 The sections above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — two red → green → refactor cycles building `OrderProcessor`, mypy as the compile step, fixtures passing the fake to the constructor
-- [typescript.md](typescript.md) — two red → green → refactor cycles building `OrderProcessor`, `tsc` as the compile step, a setup helper passing the fake to the constructor
+- [python/test-driven-development.md](python/test-driven-development.md) — two red → green → refactor cycles building `OrderProcessor`, mypy as the compile step, fixtures passing the fake to the constructor
+- [typescript/test-driven-development.md](typescript/test-driven-development.md) — two red → green → refactor cycles building `OrderProcessor`, `tsc` as the compile step, a setup helper passing the fake to the constructor

@@ -1,14 +1,6 @@
----
-name: project-structure
-description: Policy for where code lives on disk. Use when you need to create new components, adapters, contracts, factories, entrypoints or tests, deciding where code should belong, or adding code to a codebase that does not follow this structure yet. Requires the codebase-design and testing skills.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, implementation, constructor, port, adapter, decorator, contract, foreign component, foreign interface, inbound and outbound edge component, view, entrypoint, factory, composite, assembly, data carrier, resource, behaviour, legacy code) exactly.
-- **[testing](../testing/SKILL.md)** — its vocabulary for the kinds of test and where they point: entity under test, fake, unit test, integration test, end-to-end test.
-
 # Project Structure
+
+This file uses the vocabulary of [codebase-design](SKILL.md) exactly, and the kinds of test from [testing](testing.md) and where they point: entity under test, fake, unit test, integration test, end-to-end test.
 
 Project structure is the mapping of entities onto files. Each role in the assembly has a directory of its own: components are the nodes, adapters are the edges between them, contracts are the vocabulary they share, factories build the assembly, and entrypoints start it. The edge components are components like any other: they are the only ones that meet a foreign component, and nothing else in the program needs to know one is there.
 
@@ -81,7 +73,6 @@ This improves **testability for everyone** since a component can be constructed 
 
 - **Every package in `components` is a component.** It has one interface, an implementation, a constructor and a port for each dependency. The directory holds no adapters, factories or entrypoints.
 - **A component never imports another component.** A component that needs another adds a port for it. The other component's interface is passed to that port directly when it satisfies it, or through an adapter in `adapters/<component_name>/<port_name>` when it does not.
-- **A component is self-contained.** It depends only on its own package, the contracts, the language and foreign libraries.
 - **Only an edge component meets a foreign interface.** An inbound edge component presents one; an outbound edge component takes one in its constructor. Every other component reaches what a foreign component offers through a port, satisfied by the edge component facing it. An edge component should face one foreign component: where it faces more, say why in its package.
 
 This improves **locality for maintainers** since every behaviour sits behind a component's interface, every foreign library is confined to the edge components that face it, and every connection between two components is a port.
@@ -118,14 +109,14 @@ This improves **flexibility for designers** since the ports file shows everythin
 | a component's port | `adapters/<component_name>/<port_name>/<adapter_name>`, where `<component_name>` is the component that declares the port and `<port_name>` is the port's name in its constructor |
 | a contract | `adapters/<contract_name>/<adapter_name>`, where `<contract_name>` matches the contract's file in the contracts package |
 
-An adapter defines no port of its own, so there is no third row: anything with behaviour behind it that an adapter needs is a component or a contract, passed to its constructor.
+An adapter defines no port of its own, as [Relationships](SKILL.md#relationships) sets out, so there is no third row.
 
 An adapter satisfies the whole interface. It is named for the component it calls (`order_processor`), or for what it does instead when it is a decorator (`retrying`, `limited`, `truncated`). It translates between the data carriers of the components it joins, or wraps what it is given.
 
 - An adapter imports the port's interface it satisfies, and that component's data carriers, from the component's export file, or the contract it satisfies from the contracts package.
 - It imports the interfaces and data carriers of the components it calls from their export files, and receives those components through its own constructor.
 - It never imports another adapter. Adapters are combined at runtime: a factory passes one to another's constructor, typed as the interface it satisfies.
-- It reaches no resource and takes no foreign object. Code that does either is an edge component, in `components`.
+- Code that reaches a resource or takes a foreign object is not an adapter but an edge component, in `components`.
 - Its export file exports its constructor. Within `src`, only factories import it. Its unit tests import it too.
 - An adapter's package organises its contents however it wants. Any error it determines is defined inside its package.
 
@@ -154,7 +145,7 @@ Every factory lives in `factories`, at the path of what it builds:
 
 No factory lives in a component's or an adapter's package, so the factories directory is the one place where the program is wired.
 
-A factory is synchronous and reaches no resource. What else a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
+What a factory may and may not do, including why it is synchronous and reaches no resource, is covered by [dependency-injection](dependency-injection.md#the-factory).
 
 This improves **locality for maintainers** since every factory is found in one directory, and the path of each one names what it builds.
 
@@ -164,11 +155,7 @@ This improves **testability for everyone** since a test can skip the factories, 
 
 An entrypoint is a file in `entrypoints`, one for each way the program is started, named for it: `cli`, `fastapi`, `worker`. It is what the outside world is pointed at: a `[project.scripts]` entry, the app object a server is given, the file a worker loads.
 
-- **It reads the environment and acquires what lives as long as the process**: secrets, settings, connection pools.
-- **It builds the assembly by calling factories**, passing in what it acquired. It never calls a constructor.
-- **It registers the inbound edge components with the foreign components that call them**, and starts those foreign components. This is the one place outside an edge component that uses a foreign interface, and it uses it only to register and start.
-- **It closes what it acquired** when the program stops.
-- **It holds no behaviour.** Anything worth testing belongs in a component.
+What an entrypoint does, and why it holds no behaviour, is defined by [Entrypoint](SKILL.md#the-edge-of-the-program). It builds the assembly only by calling factories, never a constructor, and anything worth testing belongs in a component.
 
 A project that is a library, with no process of its own to start, has no entrypoints: its factories are where its users begin.
 
@@ -180,17 +167,12 @@ This improves **testability for everyone** since everything an entrypoint calls 
 
 There is no `utils`, `common`, `shared` or `helpers` package. A helper used by one package stays in that package. Duplicate a small helper until its second or third use, then decide:
 
-- If it meets one of the reasons in codebase-design's "When to make a component", it is a component: give it an interface, ports if it needs them, and a package named for what it does (`retry`). Other components reach it through their ports.
+- If it meets one of the reasons in [When to make a component](SKILL.md#when-to-make-a-component), it is a component: give it an interface, ports if it needs them, and a package named for what it does (`retry`). Other components reach it through their ports.
 - Otherwise the duplication was the right call.
 
 A helper never goes in the contracts package: it carries behaviour, and the contracts package holds contracts only.
 
-**Watch for code shared between adapters.** It is not forbidden, but it is usually a sign that a capability wants a home of its own, so that it can be passed to constructors instead of copied or imported. Before sharing, ask what the code is:
-
-- **Behaviour, including the translation of a provider's format**, is usually a component, passed to the constructors of the adapters that need it.
-- **Something too small for a component**, a line of formatting or a constant, is often best left as two copies, especially when they are likely to change apart.
-
-When neither fits, sharing is a judgement call: name the shared package for what it does, and never make one adapter import another.
+**Watch for code shared between adapters**, as [When to make a component](SKILL.md#when-to-make-a-component) describes. Where sharing turns out to be the call, name the shared package for what it does, and never make one adapter import another.
 
 This improves **leverage for callers** since a package's name says what it offers.
 
@@ -234,5 +216,5 @@ This improves **flexibility for designers** since the structure grows where the 
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
-- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component with a view and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
+- [python/project-structure.md](python/project-structure.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
+- [typescript/project-structure.md](typescript/project-structure.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component with a view and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules

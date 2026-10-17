@@ -1,6 +1,6 @@
 # Test-driven development in TypeScript
 
-Below follows an example for a TDD approach towards building an `OrderProcessor` component. Nothing exists before the first test. Files are placed as [project-structure](../project-structure/SKILL.md) describes.
+Below follows an example for a TDD approach towards building an `OrderProcessor` component. Nothing exists before the first test. Files are placed as [project-structure](../project-structure.md) describes.
 
 ## First TDD Cycle
 
@@ -209,4 +209,4 @@ The cycles continue until the required behaviours are all pinned. A behaviour su
 
 ## After the cycles
 
-The component now exists and has only ever been constructed with fakes. The `StripePayments` edge component that will satisfy its `payments` port is driven by its own cycles, with a fake of its `SyncFetch` view: the `sync-fetch` library it calls offers no test hook. The factories and the entrypoints are written last: see [project-structure](../project-structure/SKILL.md) for where they go and [dependency-injection](../dependency-injection/SKILL.md) for what the factories do.
+The component now exists and has only ever been constructed with fakes. The `StripePayments` edge component that will satisfy its `payments` port is driven by its own cycles, with a fake of its `SyncFetch` view: the `sync-fetch` library it calls offers no test hook. The factories and the entrypoints are written last: see [project-structure](../project-structure.md) for where they go and [dependency-injection](../dependency-injection.md) for what the factories do.

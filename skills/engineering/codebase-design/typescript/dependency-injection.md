@@ -1,6 +1,6 @@
 # Dependency Injection in TypeScript
 
-The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their TypeScript spelling. The vocabulary's TypeScript shapes — interfaces, function types, object literals — live in [codebase-design's typescript.md](../codebase-design/typescript.md).
+The rules in [dependency-injection.md](../dependency-injection.md) are language-agnostic. This file is their TypeScript spelling. The vocabulary's TypeScript shapes — interfaces, function types, object literals — live in [typescript/codebase-design.md](codebase-design.md).
 
 The style throughout: **no classes**. Entities are functions and object literals returned by their constructors; they satisfy an `interface` structurally. The one exception is an error: a subclass of `Error`. A constructor is `new…` (`newOrderProcessor`); a factory is `create…` (`createOrderProcessor`).
 
