@@ -92,7 +92,7 @@ _Avoid_: external component (external already describes a composite's ports, see
 
 _Avoid_: wrapper port, adapter port (a view is not a port: no behaviour of the project's sits behind it).
 
-**Entrypoint** — the code the outside world is pointed at to start the program: a script, a server's app object, the file a worker loads. It reads the environment, acquires the resources whose lifetime is the process, calls the factories that build the assembly, registers the inbound edge components with the foreign components that call them, starts those foreign components, and closes what it acquired. It holds no behaviour. A program has one for each way it is started; a library has none.
+**Entrypoint** — the code the outside world is pointed at to start the program: a script, a server's app object, the file a worker loads. It reads the environment, acquires the resources whose lifetime is the process, such as secrets, settings and connection pools, calls the factories that build the assembly, registers the inbound edge components with the foreign components that call them, starts those foreign components, and closes what it acquired. It holds no behaviour. A program has one for each way it is started; a library has none.
 
 _Avoid_: startup, bootstrap, composition root, main (one entrypoint among several).
 
@@ -132,7 +132,12 @@ Split behaviour out into its own component when one of these holds:
 - **It must be swappable.** The component that uses it should work with more than one version of it, each passed to the same port.
 - **It faces a foreign component.** Code that calls a library which reaches a resource, or that a framework calls, is an edge component, so the components behind it never meet the foreign interface.
 
-Watch for code shared between adapters: it is often the first sign of one of these reasons. Behaviour that several adapters need may want to be a component they receive through their constructors, rather than code they each copy or import.
+**Watch for code shared between adapters.** It is not forbidden, but it is often the first sign of one of these reasons. Before sharing, ask what the code is:
+
+- **Behaviour, including the translation of a provider's format**, is usually a component, passed to the constructors of the adapters that need it, rather than code they each copy or import.
+- **Something too small for a component**, a line of formatting or a constant, is often best left as two copies, especially when they are likely to change apart.
+
+When neither fits, sharing is a judgement call. Where the shared code goes is covered by [project-structure](project-structure.md#8-name-a-package-for-what-it-is-not-for-being-shared).
 
 ## Principles
 

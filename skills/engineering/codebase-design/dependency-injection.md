@@ -21,7 +21,7 @@ Data carriers and configuration have no implementation to swap, so they are pass
 
 An **outbound edge component**'s constructor also takes its foreign dependency: the library's own object (an `httpx.Client`, a model provider's SDK client), or a view of it where the library offers no test hook. It is the one place a foreign object appears in a constructor.
 
-An **adapter**'s constructor takes the interfaces of the components it calls, contracts and configuration. It never takes a port's interface, except a **decorator**, which takes the very interface it satisfies. It takes no foreign object: anything with behaviour behind it that it needs is a component or a contract, passed in. Like every constructor, it must take everything required to measure the adapter's behaviours.
+An **adapter**'s constructor takes the interfaces of the components it calls, contracts and configuration. It never takes a port's interface, except a **decorator**, which takes the very interface it satisfies, and it takes no foreign object: what else it needs follows from an adapter defining no port of its own, in [Relationships](SKILL.md#relationships). Like every constructor, it must take everything required to measure the adapter's behaviours.
 
 This improves **flexibility for designers** since a new component or adapter passed to a port adds a capability without touching the component, and each port can be swapped on its own.
 
@@ -46,7 +46,7 @@ This improves **testability for everyone** since every behaviour can be measured
 
 A constructor never creates what it needs and never fetches it. Neither the constructor nor the implementation constructs another component or an adapter, reads an environment variable, reads the clock or opens a connection: each of those arrives through the constructor.
 
-A resource is acquired by whoever owns its lifetime. One that lives for a single use, such as a call, a session or a conversation, is acquired by the component whose behaviour defines that use, through what its constructor took, when it is called: never while it is being constructed. A component with a lifecycle opens sessions through its interface, and the session holds the resource. One that lives as long as the process is acquired by the entrypoint and passed in.
+Who acquires a resource follows its lifetime, as the [principles](SKILL.md#principles) set out, and it is never a constructor. A resource for a single use is acquired when the component is called, or by a session its interface opens, which then holds it. One that lives as long as the process is passed in.
 
 When an entity must be built per request, because it holds that request's resources, the constructor takes a function that opens it, returning its interface. A factory satisfies that function.
 
