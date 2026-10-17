@@ -1,14 +1,6 @@
----
-name: project-structure
-description: Policy for where code lives on disk. Use when you need to create new components, adapters, contracts, factories, entrypoints or tests, deciding where code should belong, or adding code to a codebase that does not follow this structure yet. Requires the codebase-design and testing skills.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, implementation, constructor, port, adapter, decorator, contract, foreign component, foreign interface, inbound and outbound edge component, view, entrypoint, factory, composite, assembly, data carrier, resource, behaviour, legacy code) exactly.
-- **[testing](../testing/SKILL.md)** — its vocabulary for the kinds of test and where they point: entity under test, fake, unit test, integration test, end-to-end test.
-
 # Project Structure
+
+This file uses the vocabulary of [codebase-design](SKILL.md) exactly, and the kinds of test from [testing](testing.md) and where they point: entity under test, fake, unit test, integration test, end-to-end test.
 
 Project structure is the mapping of entities onto files. Each role in the assembly has a directory of its own: components are the nodes, adapters are the edges between them, contracts are the vocabulary they share, factories build the assembly, and entrypoints start it. The edge components are components like any other: they are the only ones that meet a foreign component, and nothing else in the program needs to know one is there.
 
@@ -154,7 +146,7 @@ Every factory lives in `factories`, at the path of what it builds:
 
 No factory lives in a component's or an adapter's package, so the factories directory is the one place where the program is wired.
 
-A factory is synchronous and reaches no resource. What else a factory may do is covered by [dependency-injection](../dependency-injection/SKILL.md).
+A factory is synchronous and reaches no resource. What else a factory may do is covered by [dependency-injection](dependency-injection.md).
 
 This improves **locality for maintainers** since every factory is found in one directory, and the path of each one names what it builds.
 
@@ -180,7 +172,7 @@ This improves **testability for everyone** since everything an entrypoint calls 
 
 There is no `utils`, `common`, `shared` or `helpers` package. A helper used by one package stays in that package. Duplicate a small helper until its second or third use, then decide:
 
-- If it meets one of the reasons in codebase-design's "When to make a component", it is a component: give it an interface, ports if it needs them, and a package named for what it does (`retry`). Other components reach it through their ports.
+- If it meets one of the reasons in [When to make a component](SKILL.md#when-to-make-a-component), it is a component: give it an interface, ports if it needs them, and a package named for what it does (`retry`). Other components reach it through their ports.
 - Otherwise the duplication was the right call.
 
 A helper never goes in the contracts package: it carries behaviour, and the contracts package holds contracts only.
@@ -234,5 +226,5 @@ This improves **flexibility for designers** since the structure grows where the 
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
-- [typescript.md](typescript.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component with a view and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
+- [python/project-structure.md](python/project-structure.md) — packages with `__init__.py` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules
+- [typescript/project-structure.md](typescript/project-structure.md) — directories with `index.ts` as the export file, a worked `OrderProcessor` component with its ports, an outbound edge component with a view and its factory, an adapter joining two components, inbound edge components and their entrypoints, a contract with its adapters and a decorator, the tests, legacy code, and checking the rules

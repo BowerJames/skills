@@ -1,17 +1,10 @@
----
-name: dependency-injection
-description: Discipline for how entities get their dependencies; what a constructor receives, and the factories that call it. Use when wiring dependencies, deciding whether a dependency belongs in a component's constructor or its interface, writing or changing a factory or a composite, or fixing components that create or fetch what they need. Requires the codebase-design skill.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, behaviour, implementation, constructor, port, configuration, adapter, decorator, contract, foreign component, edge component, view, entrypoint, factory, composite, assembly, data carrier, resource) exactly.
-
 # Dependency Injection
+
+This file uses the vocabulary of [codebase-design](SKILL.md) exactly.
 
 Dependency injection is passing an entity its dependencies instead of letting it create or fetch them. It has two sides. The **Constructor** accepts: a component receives what satisfies each of its **Ports**, and its **Configuration**, rather than reaching for **Resources** itself. The **Factory** supplies: it chooses what satisfies each port and calls the constructor. The aim is that every resource sits behind a port or a foreign object passed to an edge component, every dependency is declared in a constructor, the **Interface** carries only data, and nothing reaches a resource while the **Assembly** is being built.
 
-Where factories live on disk is covered by [project-structure](../project-structure/SKILL.md).
+Where factories live on disk is covered by [project-structure](project-structure.md).
 
 ## The constructor
 
@@ -111,5 +104,5 @@ This improves **locality for maintainers** since the inside of a composite can b
 
 The rules above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `create_order_processor` factory, and a `create_research_team` composite
-- [typescript.md](typescript.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `createOrderProcessor` factory, and a `createResearchTeam` composite
+- [python/dependency-injection.md](python/dependency-injection.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `create_order_processor` factory, and a `create_research_team` composite
+- [typescript/dependency-injection.md](typescript/dependency-injection.md) — worked examples of each rule, built on `OrderProcessor`, its `payments` and `clock` ports, a `StripePayments` edge component, a `createOrderProcessor` factory, and a `createResearchTeam` composite

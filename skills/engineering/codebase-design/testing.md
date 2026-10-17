@@ -1,13 +1,6 @@
----
-name: testing
-description: Discipline for testing entities through their constructors and interfaces. Use when writing or structuring tests, deciding what to test, passing fakes for ports, testing edge components against foreign components, fixing tests that break under refactor, or test-driving a change. Requires the codebase-design skill.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, component, interface, behaviour, implementation, constructor, port, configuration, adapter, decorator, contract, foreign component, edge component, view, entrypoint, factory, composite, data carrier, resource) exactly, especially one of its principles: an entity's interface and constructor are the test surface.
-
 # Testing
+
+This file uses the vocabulary of [codebase-design](SKILL.md) exactly, especially one of its principles: an entity's interface and constructor are the test surface.
 
 ## Glossary
 
@@ -73,7 +66,7 @@ Unit tests are the default, and they carry the behaviours. An integration test i
 
 Integration and end-to-end tests are kept apart from the unit tests, so the unit tests stay fast and need no environment.
 
-Where tests and fakes live on disk is covered by [project-structure](../project-structure/SKILL.md).
+Where tests and fakes live on disk is covered by [project-structure](project-structure.md).
 
 ## Anti-patterns
 
@@ -87,5 +80,5 @@ Each is a good-test criterion violated:
 
 The sections above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — pytest as the harness, a fake for each port, a helper wrapping the constructor, unit tests of an error, an adapter, an outbound edge component on `httpx.MockTransport`, a view, an inbound edge component through FastAPI's `TestClient`, a component that opens sessions, markers for integration and end-to-end tests, the anti-patterns
-- [typescript.md](typescript.md) — vitest as the harness, a fake for each port, a helper wrapping the constructor, unit tests of an error, an adapter, an outbound edge component on undici's `MockAgent`, a view, an inbound edge component through Fastify's `inject` and a command through its view, a component that opens sessions, directories for integration and end-to-end tests, the anti-patterns
+- [python/testing.md](python/testing.md) — pytest as the harness, a fake for each port, a helper wrapping the constructor, unit tests of an error, an adapter, an outbound edge component on `httpx.MockTransport`, a view, an inbound edge component through FastAPI's `TestClient`, a component that opens sessions, markers for integration and end-to-end tests, the anti-patterns
+- [typescript/testing.md](typescript/testing.md) — vitest as the harness, a fake for each port, a helper wrapping the constructor, unit tests of an error, an adapter, an outbound edge component on undici's `MockAgent`, a view, an inbound edge component through Fastify's `inject` and a command through its view, a component that opens sessions, directories for integration and end-to-end tests, the anti-patterns

@@ -1,6 +1,6 @@
 # Dependency Injection in Python
 
-The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [codebase-design's python.md](../codebase-design/python.md).
+The rules in [dependency-injection.md](../dependency-injection.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [python/codebase-design.md](codebase-design.md).
 
 # The constructor
 

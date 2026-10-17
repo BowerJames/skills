@@ -1,6 +1,6 @@
 # Project Structure in Python
 
-The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling.
+The rules in [project-structure.md](../project-structure.md) are language-agnostic. This file is their Python spelling.
 
 ## Vocabulary → Python
 
@@ -18,7 +18,7 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 
 The examples use `shop` as the project's package, so every path below sits under `src/shop`, and every import starts `shop.`.
 
-Python calls every `.py` file a "module". These skills say "file" for a `.py` file, and "component" for a package in `components`.
+Python calls every `.py` file a "module". This skill says "file" for a `.py` file, and "component" for a package in `components`.
 
 Files behind the export file carry no `_` prefix. The export file decides what is public: a name is public if `__init__.py` re-exports it and lists it in `__all__`, and private otherwise.
 

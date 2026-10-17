@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Shared vocabulary for designing simple, flexible, maintainable codebases as components joined by adapters. Use when the user wants to design or implement changes in the codebase.
+description: Designing, wiring, testing and laying out simple, flexible, maintainable codebases as components joined by adapters, with one shared vocabulary for dependency injection, testing, test-driven development and project structure. Use when the user wants to design or implement changes in the codebase, such as creating or changing components, adapters, factories or entrypoints, wiring dependencies, writing or structuring tests, test-driving a change, deciding where code belongs, or adding code to a codebase that does not follow this structure yet.
 ---
 
 # Codebase Design
@@ -13,6 +13,15 @@ The aim is to provide:
 - locality for maintainers
 - flexibility for designers
 - testability for everyone.
+
+## Topics
+
+This file holds the vocabulary and principles. Each topic file builds on them; read the one for the work at hand:
+
+- **[dependency-injection](dependency-injection.md)** — how entities get their dependencies: what a constructor receives, and the factories and composites that call it. Read it when wiring dependencies, deciding whether a dependency belongs in a component's constructor or its interface, writing or changing a factory or a composite, or fixing components that create or fetch what they need.
+- **[testing](testing.md)** — testing entities through their constructors and interfaces: one behaviour per test, a fake for every port, foreign components through their own test hooks, unit tests by default. Read it when writing or structuring tests, deciding what to test, passing fakes for ports, testing edge components against foreign components, or fixing tests that break under refactor.
+- **[test-driven-development](test-driven-development.md)** — driving development through tests: the red → green → refactor loop, one behaviour per cycle, the constructor, interface and ports evolving with the tests. Read it when adding, enhancing or amending components, edge components or adapters.
+- **[project-structure](project-structure.md)** — where code lives on disk: components, adapters, contracts, factories and entrypoints each in their own directory, imports pointing inward, tests mirroring the source tree, legacy code met as a foreign component. Read it when creating components, adapters, contracts, factories, entrypoints or tests, deciding where code belongs, or adding code to a codebase that does not follow this structure yet.
 
 ## Glossary
 
@@ -175,7 +184,7 @@ Good entities make testing natural:
 
 ## Language idioms
 
-The vocabulary above is language-agnostic. When implementing, read the file for the target language:
+The vocabulary above, and every topic file, is language-agnostic. Each language has a directory with one file per topic, and each topic file links to its own. When implementing, start with the vocabulary file for the target language:
 
-- [python.md](python.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
-- [typescript.md](typescript.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
+- [python/codebase-design.md](python/codebase-design.md) — Protocols and Callables as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions
+- [typescript/codebase-design.md](typescript/codebase-design.md) — no classes: interfaces and function types as interfaces and ports, a worked `OrderProcessor` component with its ports, an error it owns, an outbound edge component and its factories, a decorator, an inbound edge component, and a component that opens sessions

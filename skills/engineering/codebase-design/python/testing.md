@@ -1,6 +1,6 @@
 # Testing in Python
 
-The sections in [SKILL.md](SKILL.md) are language-agnostic. This file is its Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [codebase-design's python.md](../codebase-design/python.md).
+The sections in [testing.md](../testing.md) are language-agnostic. This file is its Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [python/codebase-design.md](codebase-design.md).
 
 ## What makes a good test
 
