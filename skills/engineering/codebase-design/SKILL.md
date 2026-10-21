@@ -22,7 +22,7 @@ The user prescribes the style in this skill. Thus the style in this skill is the
 
 After a change, the code must look as if it was designed for the current intent from the start. Change existing code when the intent requires it. Remove code that the intent no longer requires.
 
-Do refactors and behaviour changes as separate steps. A refactor does not change the tests. A behaviour change is small and local.
+Do refactors and behaviour changes as separate steps. A refactor does not change what the tests check. A behaviour change is small and local.
 
 Get flexibility from structure. Do not write code for a change that nobody has asked for.
 
@@ -40,11 +40,11 @@ The code has five layers. Each layer has one job.
 | `pure_functions/` | Holds the pure functions that more than one component uses. | **Small code:** Components share logic and do not repeat it. **Verify:** A pure function gives the same output for the same input, so a test can verify it directly. |
 | `component/` | Holds the behaviour. Each component is self-contained. | **Understand:** The reader can understand one component without reading other components. **Small change:** A change to one component stays in that component. **Verify:** A test gives each dependency a simple fake. |
 | `wiring/` | Builds the components and connects them. Holds all the knowledge of how components work together. | **Find, Understand:** The reader can see the structure of the program in one place. **Small change:** A change to how components work together is a change to the wiring only. |
-| `entrypoint/` | Starts the process. Converts between framework types and domain data. | **Small change:** When a framework changes, only the entrypoint changes. **Understand:** Other layers do not use framework types, so the reader does not need to know the framework to read them. |
+| `entrypoint/` | Holds the files that a process starts from. Converts between framework types and domain data. | **Small change:** When a framework changes, only the entrypoint changes. **Understand:** Other layers do not use framework types, so the reader does not need to know the framework to read them. |
 
 Imports go in one direction:
 
-`entrypoint/` → `wiring/` → `component/` → `pure_functions/` → `domain/` → standard library and external packages
+`entrypoint/` → `wiring/` → `component/` → `pure_functions/` → `domain/` → libraries and frameworks
 
 A layer can import from the layers to its right. A layer must not import from the layers to its left.
 
@@ -60,12 +60,13 @@ The domain holds the data that components use to communicate.
 
 - The domain holds only immutable data. It holds no behaviour.
   **Understand:** The reader can read the domain without reading an implementation. **Verify:** A component cannot change data that a different component gave it. Thus a test of one component stays valid for all callers.
+
+  Exception: A domain type can be another name for a data type of a library, when that data type is not immutable. Code must not change data of that type.
+  **Small code:** The domain does not copy the data types of a library.
 - Data that goes between components has a domain type.
   **Understand:** The domain shows all the data that can go between components. **Small change:** Components agree only on data. Thus a change to one component does not change a different component.
 
 ## Pure functions
-
-A pure function gives the same output for the same input. It does no I/O. It does not read the clock, random values, the environment or global state. It does not change its inputs.
 
 - A function in `pure_functions/` must be pure.
   **Verify:** A test can verify a pure function directly, with no fakes. **Small change:** Components can share a pure function, because it holds no state that links them.
@@ -94,7 +95,7 @@ The wiring builds the components and connects them. It holds all the knowledge o
 
 ## Entrypoints
 
-An entrypoint starts the process. It calls the wiring. It can give the result to a framework.
+A process starts from an entrypoint. The entrypoint calls the wiring. It can give the result to a framework.
 
-- Only an entrypoint uses the types of a framework that calls the code. The entrypoint converts these types to domain data, and converts domain data to these types.
+- Only an entrypoint uses the types of a framework. The entrypoint converts these types to domain data, and converts domain data to these types.
   **Understand:** The reader does not need to know the framework to read the other layers. **Small change:** When a framework changes, only the entrypoint changes.
