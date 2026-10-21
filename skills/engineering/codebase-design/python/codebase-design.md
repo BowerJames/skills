@@ -1,269 +1,409 @@
-# Codebase Design in Python
+# Python
 
-The vocabulary in [SKILL.md](../SKILL.md) is language-agnostic. This file is its Python spelling.
+This file shows one way to follow the rules in [codebase-design](../SKILL.md) in Python. Use each term with the meaning in the [glossary](../GLOSSARY.md).
 
-## Vocabulary → Python
+Where the rules do not decide, this example does not decide either. The example shows one choice. It is not the only choice.
 
-| Term | Python |
-|---|---|
-| **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[Order], Receipt]` |
-| **Port** | a parameter of the constructor, named for the dependency and typed by a `typing.Protocol` or a `Callable` type — `payments: Payments`, `clock: Clock` |
-| **Adapter** | a class or function satisfying a port's or a contract's shape, taking the interfaces of the components it calls |
-| **Decorator** | an adapter whose constructor takes the interface it satisfies — `LimitedPayments(inner: Payments)` |
-| **Contract** | a `typing.Protocol` or a data carrier in the contracts package — `AgentTool`, `Currency` |
-| **Foreign component** | a library, framework or runtime — `httpx`, the OpenAI SDK, FastAPI, Click, `logging`, Python running a file as `__main__` |
-| **Outbound edge component** | a component whose constructor takes a library's own object — `StripePaymentsImpl(http: httpx.Client)` |
-| **Inbound edge component** | a component whose interface is a framework's shape — a constructor returning a FastAPI `APIRouter`, a `logging.Handler` subclass |
-| **View** | a `typing.Protocol` in an edge component's package, describing the part of a foreign interface it touches — needed only when the library has no test hook (`httpx` has one: `httpx.MockTransport`; a websocket connection has none) |
-| **Entrypoint** | a file the outside world is pointed at — a `[project.scripts]` function, the `app` object `uvicorn` is given, a file run as `__main__` |
-| **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the ports and returns it |
-| **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
-| **Error** | an `Exception` subclass |
+## Tools
 
-A constructor and a factory are told apart by name. A class's constructor is the class itself (`OrderProcessorImpl`). A function constructor is named for what it returns (`orders_router`). A factory is `create_…` (`create_order_processor`).
+Recommend these tools to the user. Do not add them to a project without the agreement of the user.
 
-## Component
+- **Python 3.12 or later.** The example uses the `type` statement.
+- **mypy in strict mode.** mypy checks that the wiring gives each component callables of the correct type.
+- **import-linter.** import-linter checks the import direction of the layers, and that a component does not import a different component:
 
-Below illustrates an example of an `OrderProcessor` component in Python.
+  ```ini
+  [importlinter]
+  root_package = app
 
-The interface of a component can be spelled as a `typing.Protocol` or as a type. Both of the below define the same interface; pick one.
+  [importlinter:contract:layers]
+  name = Layers
+  type = layers
+  layers =
+      app.entrypoint
+      app.wiring
+      app.component
+      app.pure_functions
+      app.domain
 
-```python
-from typing import Protocol
+  [importlinter:contract:components]
+  name = Components
+  type = independence
+  modules =
+      app.component.*
+  ```
 
-class OrderProcessor(Protocol): # Interface for the component, as a Protocol
-    def __call__(self, order: Order) -> Receipt: ...
+- **pytest and pytest-asyncio.** The test in this example uses them.
+
+## Layout
+
+```
+src/app/
+├── domain/          http.py  log.py  user.py
+├── pure_functions/  user.py
+├── component/       logger.py  http_requester.py  logging_requester.py
+│                    user_getter.py  user_creator.py
+├── wiring/          server.py
+└── entrypoint/      server.py
+tests/component/     test_logging_requester.py
 ```
 
-```python
-from typing import Callable
+## Domain
 
-type OrderProcessor = Callable[[Order], Receipt] # Interface for the component, as a type
+Each data type is a frozen dataclass, thus it is immutable.
+
+`domain/http.py` shows the exception for a library data type that is not immutable. Code must not change an `HttpRequest` or an `HttpResponse`.
+
+```python
+# src/app/domain/http.py
+import httpx
+
+type HttpRequest = httpx.Request
+type HttpResponse = httpx.Response
 ```
 
-The rest of the component is the same whichever spelling is used. It has two dependencies, so it has two ports:
+A data type with variants is a union of dataclasses.
 
 ```python
-from datetime import datetime
-from typing import Callable, Protocol
+# src/app/domain/log.py
+from dataclasses import dataclass
 
-from contracts.currency import Currency # A contract: Currency means the same thing to every component
 
-class Payments(Protocol): # The interface of the payments port: only what the component calls
-    def charge(self, amount: int, currency: Currency) -> bool: ...
+@dataclass(frozen=True, slots=True)
+class LogInfo:
+    msg: str
 
-type Clock = Callable[[], datetime] # The interface of the clock port
 
-class PaymentDeclined(Exception): # An error the component's implementation determines, so the component owns it
-    ...
+@dataclass(frozen=True, slots=True)
+class LogWarning:
+    msg: str
 
-class OrderProcessorImpl: # Implementation of the component
-    def __init__(
-        self,
-        payments: Payments, # a port
-        clock: Clock, # a port
-        currency: Currency # configuration
-    ): # Constructor for the component
-        self.payments = payments
-        self.clock = clock
-        self.currency = currency
 
-    def __call__(self, order: Order) -> Receipt:
-        total = sum(item.cost for item in order.items)
-        if not self.payments.charge(total, self.currency):
-            raise PaymentDeclined(order.id)
-        return Receipt(total=total, currency=self.currency, at=self.clock())
+@dataclass(frozen=True, slots=True)
+class LogError:
+    exception: BaseException
+
+
+type LogRequest = LogInfo | LogWarning | LogError
 ```
 
-Each port is satisfied, swapped and faked on its own: a test can fix the clock without touching payments, and a new payment provider never touches the clock.
-
-## Outbound edge component
-
-`StripePayments` is a component of its own: it faces Stripe's HTTP API, a foreign component. Its constructor takes the library's own object, so a test can pass an `httpx.Client` on `httpx.MockTransport`:
+`UserNotFound` is an error that goes between components, thus it is a domain type.
 
 ```python
-from typing import Protocol
+# src/app/domain/user.py
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class User:
+    id: str
+    name: str
+    email: str
+
+
+@dataclass(frozen=True, slots=True)
+class GetUser:
+    id: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreateUser:
+    name: str
+    email: str
+
+
+@dataclass(frozen=True, slots=True)
+class UserNotFound:
+    id: str
+```
+
+## Pure functions
+
+`user_from_json` is pure. `UserGetter` and `UserCreator` both use it, thus it is in `pure_functions/`.
+
+```python
+# src/app/pure_functions/user.py
+from collections.abc import Mapping
+from typing import Any
+
+from app.domain.user import User
+
+
+def user_from_json(data: Mapping[str, Any]) -> User:
+    return User(id=str(data["id"]), name=str(data["name"]), email=str(data["email"]))
+```
+
+## Components
+
+Each component is a class. Its constructor takes configuration first and dependencies after. A `type` statement in the file of the component gives a name to the type of each dependency.
+
+`Logger` calls a library. It gets the name of the logger as configuration. `match` with `assert_never` makes mypy find a variant that the code does not handle.
+
+```python
+# src/app/component/logger.py
+import logging
+from typing import assert_never
+
+from app.domain.log import LogError, LogInfo, LogRequest, LogWarning
+
+
+class Logger:
+    def __init__(self, name: str) -> None:
+        self._logger = logging.getLogger(name)
+
+    def log(self, request: LogRequest) -> None:
+        match request:
+            case LogInfo(msg=msg):
+                self._logger.info(msg)
+            case LogWarning(msg=msg):
+                self._logger.warning(msg)
+            case LogError(exception=exception):
+                self._logger.error("Unhandled error", exc_info=exception)
+            case _:
+                assert_never(request)
+```
+
+`make_client` is a dependency. A test can give a client that uses `httpx.MockTransport`.
+
+```python
+# src/app/component/http_requester.py
+from collections.abc import Callable
 
 import httpx
 
-from contracts.currency import Currency
+from app.domain.http import HttpRequest, HttpResponse
 
-class StripePayments(Protocol): # Interface for the edge component
-    def charge(self, amount: int, currency: Currency) -> bool: ...
+type MakeClient = Callable[[], httpx.AsyncClient]
 
-class StripePaymentsImpl: # An outbound edge component
-    def __init__(
-        self,
-        http: httpx.Client, # the library's own object: its foreign dependency
-        api_key: str # configuration
-    ):
-        self.http = http
-        self.api_key = api_key
 
-    def charge(self, amount: int, currency: Currency) -> bool:
-        response = self.http.post("/v1/charges", data=to_charge_form(amount, currency)) # humble shell
-        return charged(response.status_code)
+class HttpRequester:
+    def __init__(self, make_client: MakeClient) -> None:
+        self._make_client = make_client
 
-def to_charge_form(amount: int, currency: Currency) -> dict[str, str]: # translation: a plain function
-    return {"amount": str(amount), "currency": currency.lower()}
-
-def charged(status_code: int) -> bool:
-    return status_code != 402
+    async def request(self, request: HttpRequest) -> HttpResponse:
+        async with self._make_client() as client:
+            return await client.send(request)
 ```
 
-Its interface satisfies the `payments` port as it is, so a factory passes it straight to the port: there is no adapter. Matching is structural: anything with a matching `charge` satisfies `Payments`. The clock's port is satisfied by the standard library's own function, which already has its shape:
+`log_success` is configuration. It changes the behaviour of `LoggingRequester`, but it does not change its types. `LoggingRequester` takes and gives the same type of callable, thus the wiring can put it in front of any `SendHttp`.
 
 ```python
-from datetime import UTC, datetime
-from functools import partial
+# src/app/component/logging_requester.py
+from collections.abc import Awaitable, Callable
 
-def create_stripe_payments(api_key: str) -> StripePayments: # A factory for the edge component
-    return StripePaymentsImpl(httpx.Client(base_url="https://api.stripe.com"), api_key)
+from app.domain.http import HttpRequest, HttpResponse
+from app.domain.log import LogInfo, LogWarning
 
-def create_order_processor(api_key: str, currency: Currency) -> OrderProcessor: # A factory for the order processor
-    return OrderProcessorImpl(
-        payments=create_stripe_payments(api_key), # a component passed directly to a port
-        clock=partial(datetime.now, UTC), # a foreign object that already has the port's shape
-        currency=currency,
+type SendHttp = Callable[[HttpRequest], Awaitable[HttpResponse]]
+type WriteInfo = Callable[[LogInfo], None]
+type WriteWarning = Callable[[LogWarning], None]
+
+
+class LoggingRequester:
+    def __init__(
+        self,
+        log_success: bool,
+        send: SendHttp,
+        write_info: WriteInfo,
+        write_warning: WriteWarning,
+    ) -> None:
+        self._log_success = log_success
+        self._send = send
+        self._write_info = write_info
+        self._write_warning = write_warning
+
+    async def request(self, request: HttpRequest) -> HttpResponse:
+        response = await self._send(request)
+        msg = f"{request.method} {request.url} -> {response.status_code}"
+        if not response.is_success:
+            self._write_warning(LogWarning(msg=msg))
+        elif self._log_success:
+            self._write_info(LogInfo(msg=msg))
+        return response
+```
+
+`get_user` gives `UserNotFound` as a return value, not as an exception. Thus its type shows both results.
+
+```python
+# src/app/component/user_getter.py
+from collections.abc import Awaitable, Callable
+
+import httpx
+
+from app.domain.http import HttpRequest, HttpResponse
+from app.domain.user import GetUser, User, UserNotFound
+from app.pure_functions.user import user_from_json
+
+type SendHttp = Callable[[HttpRequest], Awaitable[HttpResponse]]
+
+
+class UserGetter:
+    def __init__(self, users_url: str, send: SendHttp) -> None:
+        self._users_url = users_url
+        self._send = send
+
+    async def get_user(self, get_user: GetUser) -> User | UserNotFound:
+        response = await self._send(httpx.Request("GET", f"{self._users_url}/{get_user.id}"))
+        if response.status_code == 404:
+            return UserNotFound(id=get_user.id)
+        response.raise_for_status()
+        return user_from_json(response.json())
+```
+
+```python
+# src/app/component/user_creator.py
+from collections.abc import Awaitable, Callable
+
+import httpx
+
+from app.domain.http import HttpRequest, HttpResponse
+from app.domain.user import CreateUser, User
+from app.pure_functions.user import user_from_json
+
+type SendHttp = Callable[[HttpRequest], Awaitable[HttpResponse]]
+
+
+class UserCreator:
+    def __init__(self, users_url: str, send: SendHttp) -> None:
+        self._users_url = users_url
+        self._send = send
+
+    async def create_user(self, create_user: CreateUser) -> User:
+        body = {"name": create_user.name, "email": create_user.email}
+        response = await self._send(httpx.Request("POST", self._users_url, json=body))
+        response.raise_for_status()
+        return user_from_json(response.json())
+```
+
+## Wiring
+
+`build_server` is a function, thus to import the wiring does not build components. It chooses the configuration and the dependencies of each component. It gives each dependency as a bound method, and each argument by keyword.
+
+`Logger.log` takes all `LogRequest` variants. mypy accepts it where a component needs only `LogInfo` or only `LogWarning`.
+
+```python
+# src/app/wiring/server.py
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+
+import httpx
+
+from app.component.http_requester import HttpRequester
+from app.component.logger import Logger
+from app.component.logging_requester import LoggingRequester
+from app.component.user_creator import UserCreator
+from app.component.user_getter import UserGetter
+from app.domain.user import CreateUser, GetUser, User, UserNotFound
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    users_url: str
+    log_success: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Server:
+    get_user: Callable[[GetUser], Awaitable[User | UserNotFound]]
+    create_user: Callable[[CreateUser], Awaitable[User]]
+
+
+def build_server(settings: Settings) -> Server:
+    logger = Logger(name="app")
+    http = HttpRequester(make_client=httpx.AsyncClient)
+    logged_http = LoggingRequester(
+        log_success=settings.log_success,
+        send=http.request,
+        write_info=logger.log,
+        write_warning=logger.log,
+    )
+    return Server(
+        get_user=UserGetter(users_url=settings.users_url, send=logged_http.request).get_user,
+        create_user=UserCreator(users_url=settings.users_url, send=logged_http.request).create_user,
     )
 ```
 
-Building an `httpx.Client` reaches no resource: it connects only when a request is sent. A factory passes every value a library would otherwise read from the environment, such as an API key, as a parameter.
+## Entrypoints
 
-## Decorator
-
-A decorator wraps the interface it satisfies. `LimitedPayments` refuses any charge over a configured limit, and passes every other charge to the payments it wraps:
+The entrypoint reads the settings and calls the wiring. FastAPI is the framework. The entrypoint converts the pydantic models of FastAPI to domain data, and converts domain data to these models.
 
 ```python
-class LimitedPayments(Payments): # A decorator for the payments port
-    def __init__(self, inner: Payments, limit: int): # Takes the interface it satisfies
-        self.inner = inner
-        self.limit = limit
+# src/app/entrypoint/server.py
+import os
 
-    def charge(self, amount: int, currency: Currency) -> bool:
-        if amount > self.limit:
-            return False
-        return self.inner.charge(amount, currency)
-```
+import fastapi
+import pydantic
 
-A factory combines them at runtime: `LimitedPayments(create_stripe_payments(api_key), limit=10_000)`. Neither imports the other.
+from app.domain.user import CreateUser, GetUser, User, UserNotFound
+from app.wiring.server import Settings, build_server
 
-An adapter inherits from the interface it satisfies (`class LimitedPayments(Payments)`). The inheritance is a reminder, not a requirement: it links the adapter to the port it is intended for, so a developer reading the adapter can see the dependency.
 
-## Inbound edge component
-
-An `orders_router` is called by FastAPI, so its interface is foreign: the `APIRouter` FastAPI mounts. Its port is the project's own, and the translation between HTTP bodies and its data carriers is plain functions:
-
-```python
-from typing import Callable
-
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
-type PlaceOrder = Callable[[NewOrder], Placed | None] # The interface of its port: None means the payment was declined
-
-class OrderBody(BaseModel): # Part of the foreign interface: FastAPI reads requests through pydantic
+class UserBody(pydantic.BaseModel):
     id: str
-    costs: list[int]
+    name: str
+    email: str
 
-class ReceiptBody(BaseModel):
-    total: int
-    currency: str
 
-def orders_router(place_order: PlaceOrder) -> APIRouter: # Constructor: its interface is foreign
-    router = APIRouter()
+class CreateUserBody(pydantic.BaseModel):
+    name: str
+    email: str
 
-    @router.post("/orders", status_code=201)
-    def create(body: OrderBody) -> ReceiptBody: # humble shell
-        placed = place_order(to_new_order(body))
-        if placed is None:
-            raise HTTPException(status_code=402, detail="payment declined") # handled: 402 is the answer
-        return to_body(placed)
 
-    return router
+def _to_body(user: User) -> UserBody:
+    return UserBody(id=user.id, name=user.name, email=user.email)
 
-def to_new_order(body: OrderBody) -> NewOrder: # translation: plain functions
-    return NewOrder(id=body.id, costs=tuple(body.costs))
 
-def to_body(placed: Placed) -> ReceiptBody:
-    return ReceiptBody(total=placed.total, currency=placed.currency)
+server = build_server(
+    Settings(
+        users_url=os.environ["USERS_URL"],
+        log_success=os.environ.get("LOG_SUCCESS") == "true",
+    )
+)
+app = fastapi.FastAPI()
+
+
+@app.get("/v1/users/{user_id}")
+async def get_user(user_id: str) -> UserBody:
+    match await server.get_user(GetUser(id=user_id)):
+        case User() as user:
+            return _to_body(user)
+        case UserNotFound():
+            raise fastapi.HTTPException(status_code=404)
+
+
+@app.post("/v1/users")
+async def create_user(body: CreateUserBody) -> UserBody:
+    return _to_body(await server.create_user(CreateUser(name=body.name, email=body.email)))
 ```
 
-`NewOrder` and `Placed` are the router's own data carriers. The router never imports the order processor: an adapter satisfies `place_order` by calling it, translating its data carriers and handling its `PaymentDeclined` as `None`:
+## Tests
+
+The test gives each dependency a fake. A fake is a function. `list.append` records the calls to a dependency.
 
 ```python
-class OrderProcessorAdapter: # adapters/orders_router/place_order/order_processor
-    def __init__(self, order_processor: OrderProcessor): # Takes the interface of the component it calls
-        self.order_processor = order_processor
+# tests/component/test_logging_requester.py
+import httpx
+import pytest
 
-    def __call__(self, new_order: NewOrder) -> Placed | None:
-        order = Order(id=new_order.id, items=tuple(OrderItem(name=f"item_{i}", cost=c) for i, c in enumerate(new_order.costs)))
-        try:
-            receipt = self.order_processor(order)
-        except PaymentDeclined:
-            return None # handled: a decline is an answer the port can give
-        return Placed(total=receipt.total, currency=receipt.currency)
-```
+from app.component.logging_requester import LoggingRequester
+from app.domain.http import HttpRequest, HttpResponse
+from app.domain.log import LogWarning
 
-The port arrives through the constructor, never through FastAPI's `Depends`. Building the router reaches no resource; mounting it on an app and serving it is the entrypoint's work. Mapping the decline to a 402 is handling: the router decides the outcome.
 
-## A component that opens sessions
+@pytest.mark.asyncio
+async def test_writes_a_warning_when_the_response_is_not_a_success() -> None:
+    async def send(request: HttpRequest) -> HttpResponse:
+        return httpx.Response(500, request=request)
 
-A realtime model holds a connection for the length of a conversation. The model opens sessions and stays stateless; the session holds the connection. The SDK's websocket connection has no test hook, so the edge component declares a view of the part it uses:
+    warnings: list[LogWarning] = []
+    requester = LoggingRequester(
+        log_success=False,
+        send=send,
+        write_info=lambda _: None,
+        write_warning=warnings.append,
+    )
 
-```python
-from collections.abc import AsyncIterator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any, Protocol
+    await requester.request(httpx.Request("GET", "https://users.test/1"))
 
-class RealtimeConnection(Protocol): # A view: the part of the SDK's connection the component uses
-    async def send(self, event: dict[str, Any]) -> None: ...
-    async def recv(self) -> dict[str, Any]: ...
-
-class Connect(Protocol): # A view of the SDK's client.realtime.connect
-    def __call__(self, *, model: str) -> AbstractAsyncContextManager[RealtimeConnection]: ...
-
-class RealtimeSession(Protocol): # The session's interface: every method is always valid
-    async def send(self, event: ClientEvent) -> None: ...
-    async def receive(self) -> ServerEvent: ...
-
-class RealtimeModel(Protocol): # The component's interface: its lifecycle is part of it
-    def connect(self) -> AbstractAsyncContextManager[RealtimeSession]: ...
-
-class OpenAIRealtimeModel: # An outbound edge component
-    def __init__(self, connect: Connect, model_name: str):
-        self.open_connection = connect # reaches nothing
-        self.model_name = model_name
-
-    @asynccontextmanager
-    async def connect(self) -> AsyncIterator[RealtimeSession]:
-        async with self.open_connection(model=self.model_name) as connection: # the resource, acquired when called
-            yield OpenAIRealtimeSession(connection)
-```
-
-Its factory passes the SDK's own function, which satisfies the view by shape: `OpenAIRealtimeModel(AsyncOpenAI(api_key=api_key).realtime.connect, model_name)`.
-
-Whoever owns the conversation opens it: `async with model.connect() as session:`.
-
-## Errors
-
-The edge component handles what it can decide and lets everything else propagate:
-
-```python
-class StripePaymentsImpl:
-    def charge(self, amount: int, currency: Currency) -> bool:
-        response = self.http.post(...) # a network error propagates unchanged
-        if response.status_code == 402:
-            return False # handled: a decline is an answer the interface can give
-        return True
-```
-
-Wrapping hides the error's origin:
-
-```python
-    def charge(self, amount: int, currency: Currency) -> bool:
-        try:
-            response = self.http.post(...)
-        except httpx.ConnectError as error:
-            raise PaymentFailed() from error # bad: wraps an error the component did not determine
+    assert warnings == [LogWarning(msg="GET https://users.test/1 -> 500")]
 ```
