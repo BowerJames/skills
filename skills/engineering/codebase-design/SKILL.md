@@ -28,6 +28,16 @@ Get flexibility from structure. Do not write code for a change that nobody has a
 
 When a choice makes code easier to write but harder to read, choose the easier read.
 
+## Legacy code
+
+Before you change or add code in a project that has [legacy code](GLOSSARY.md), agree with the user how to proceed. Ask before the first change in a task. Do not ask again for each change in that task. Give the user these choices:
+
+- Follow the structure of the legacy code.
+- Put new code in the structure of this skill, and do not change the legacy code.
+- Move the legacy code into the structure of this skill as a refactor, in small steps.
+
+**Understand:** The user decides how many structures the project has. **Small change:** The agent does not change the structure of a project when the user did not ask for it.
+
 ## Files
 
 - **[GLOSSARY](GLOSSARY.md)** — the meaning of each term in this skill. Read it before you use this skill.

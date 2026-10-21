@@ -22,6 +22,8 @@ This file defines the terms in [codebase-design](SKILL.md). Use each term only w
 
 **Implementation.** The body of a function or a class: the code that makes its behaviour. The types of the function or the class are not part of its implementation.
 
+**Legacy code.** Code of the project that does not follow the structure in [codebase-design](SKILL.md). A defect in code that follows the structure is not legacy code.
+
 **Library.** Code that the project did not write and that code of the project calls. Code of the project decides when a library runs. The standard library is a library.
 
 **Pure function.** A function that gives the same output for the same input. It does no I/O. It does not read the clock, random values, the environment or global state. It does not change its inputs.
