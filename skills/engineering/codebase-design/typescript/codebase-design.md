@@ -65,7 +65,7 @@ Recommend these tools to the user. Do not add them to a project without the agre
 src/
 ├── domain/          http.ts  log.ts  user.ts
 ├── pure_functions/  user.ts
-├── component/       logger.ts  http-requester.ts  logging-requester.ts
+├── component/       logger.ts  logging-requester.ts
 │                    user-getter.ts  user-creator.ts
 ├── wiring/          server.ts
 └── entrypoint/      server.ts
@@ -161,26 +161,6 @@ export function makeLogger(options: { readonly name: string }): Logger {
           request satisfies never;
       }
     },
-  };
-}
-```
-
-`fetch` is a dependency. A test can give a fake `fetch`.
-
-```ts
-// src/component/http-requester.ts
-import type { HttpRequest, HttpResponse } from "../domain/http";
-
-type Fetch = (request: HttpRequest) => Promise<HttpResponse>;
-
-export interface HttpRequester {
-  readonly request: (request: HttpRequest) => Promise<HttpResponse>;
-}
-
-export function makeHttpRequester(options: { readonly fetch: Fetch }): HttpRequester {
-  const { fetch } = options;
-  return {
-    request: (request) => fetch(request),
   };
 }
 ```
@@ -293,13 +273,14 @@ export function makeUserCreator(options: {
 
 ## Wiring
 
-`buildServer` is a function, thus to import the wiring does not build components. It chooses the configuration and the dependencies of each component. It gives each dependency as a member of a component, and each argument by name.
+`buildServer` is a function, thus to import the wiring does not build components. It chooses the configuration and the dependencies of each component. It gives each dependency as a member of a component or as a function, and each argument by name.
+
+The global `fetch` is the `send` dependency of `LoggingRequester`. `fetch` shares its connections, and nothing must close it, thus `Server` has no `close`.
 
 `logger.log` takes all `LogRequest` variants. `tsc` accepts it where a component needs only `LogInfo` or only `LogWarning`.
 
 ```ts
 // src/wiring/server.ts
-import { makeHttpRequester } from "../component/http-requester";
 import { makeLogger } from "../component/logger";
 import { makeLoggingRequester } from "../component/logging-requester";
 import { makeUserCreator, type UserCreator } from "../component/user-creator";
@@ -314,10 +295,9 @@ export interface Server {
 
 export function buildServer(settings: Settings): Server {
   const logger = makeLogger({ name: "app" });
-  const http = makeHttpRequester({ fetch });
   const loggedHttp = makeLoggingRequester({
     logSuccess: settings.logSuccess,
-    send: http.request,
+    send: fetch,
     writeInfo: logger.log,
     writeWarning: logger.log,
   });

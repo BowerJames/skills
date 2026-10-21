@@ -41,7 +41,7 @@ Recommend these tools to the user. Do not add them to a project without the agre
 src/app/
 ├── domain/          http.py  log.py  user.py
 ├── pure_functions/  user.py
-├── component/       logger.py  http_requester.py  logging_requester.py
+├── component/       logger.py  logging_requester.py
 │                    user_getter.py  user_creator.py
 ├── wiring/          server.py
 └── entrypoint/      server.py
@@ -163,28 +163,6 @@ class Logger:
                 assert_never(request)
 ```
 
-`make_client` is a dependency. A test can give a client that uses `httpx.MockTransport`.
-
-```python
-# src/app/component/http_requester.py
-from collections.abc import Callable
-
-import httpx
-
-from app.domain.http import HttpRequest, HttpResponse
-
-type MakeClient = Callable[[], httpx.AsyncClient]
-
-
-class HttpRequester:
-    def __init__(self, make_client: MakeClient) -> None:
-        self._make_client = make_client
-
-    async def request(self, request: HttpRequest) -> HttpResponse:
-        async with self._make_client() as client:
-            return await client.send(request)
-```
-
 `log_success` is configuration. It changes the behaviour of `LoggingRequester`, but it does not change its types. `LoggingRequester` takes and gives the same type of callable, thus the wiring can put it in front of any `SendHttp`.
 
 ```python
@@ -279,6 +257,8 @@ class UserCreator:
 
 `build_server` is a function, thus to import the wiring does not build components. It chooses the configuration and the dependencies of each component. It gives each dependency as a bound method, and each argument by keyword.
 
+The wiring makes one `httpx.AsyncClient`, thus all requests share its connection pool. `client.send` is the `send` dependency of `LoggingRequester`. `Server.close` closes the client.
+
 `Logger.log` takes all `LogRequest` variants. mypy accepts it where a component needs only `LogInfo` or only `LogWarning`.
 
 ```python
@@ -288,7 +268,6 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.component.http_requester import HttpRequester
 from app.component.logger import Logger
 from app.component.logging_requester import LoggingRequester
 from app.component.user_creator import UserCreator
@@ -306,20 +285,22 @@ class Settings:
 class Server:
     get_user: Callable[[GetUser], Awaitable[User | UserNotFound]]
     create_user: Callable[[CreateUser], Awaitable[User]]
+    close: Callable[[], Awaitable[None]]
 
 
 def build_server(settings: Settings) -> Server:
+    client = httpx.AsyncClient()
     logger = Logger(name="app")
-    http = HttpRequester(make_client=httpx.AsyncClient)
     logged_http = LoggingRequester(
         log_success=settings.log_success,
-        send=http.request,
+        send=client.send,
         write_info=logger.log,
         write_warning=logger.log,
     )
     return Server(
         get_user=UserGetter(users_url=settings.users_url, send=logged_http.request).get_user,
         create_user=UserCreator(users_url=settings.users_url, send=logged_http.request).create_user,
+        close=client.aclose,
     )
 ```
 
@@ -327,9 +308,13 @@ def build_server(settings: Settings) -> Server:
 
 The entrypoint reads the settings and calls the wiring. FastAPI is the framework. The entrypoint converts the pydantic models of FastAPI to domain data, and converts domain data to these models.
 
+The framework decides when the process stops, thus the entrypoint calls `server.close` from the `lifespan` of FastAPI.
+
 ```python
 # src/app/entrypoint/server.py
+import contextlib
 import os
+from collections.abc import AsyncIterator
 
 import fastapi
 import pydantic
@@ -359,7 +344,15 @@ server = build_server(
         log_success=os.environ.get("LOG_SUCCESS") == "true",
     )
 )
-app = fastapi.FastAPI()
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_: fastapi.FastAPI) -> AsyncIterator[None]:
+    yield
+    await server.close()
+
+
+app = fastapi.FastAPI(lifespan=lifespan)
 
 
 @app.get("/v1/users/{user_id}")
