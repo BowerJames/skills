@@ -10,7 +10,7 @@ Recommend these tools to the user. Do not add them to a project without the agre
 
 - **Python 3.12 or later.** The example uses the `type` statement.
 - **mypy in strict mode.** mypy checks that the wiring gives each component callables of the correct type.
-- **import-linter.** import-linter checks the import direction of the layers:
+- **import-linter.** import-linter checks the import direction of the layers, and that a component does not import a different component:
 
   ```ini
   [importlinter]
@@ -25,6 +25,12 @@ Recommend these tools to the user. Do not add them to a project without the agre
       app.component
       app.pure_functions
       app.domain
+
+  [importlinter:contract:components]
+  name = Components
+  type = independence
+  modules =
+      app.component.*
   ```
 
 - **pytest and pytest-asyncio.** The test in this example uses them.

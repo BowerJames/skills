@@ -32,6 +32,7 @@ When a choice makes code easier to write but harder to read, choose the easier r
 
 - **[GLOSSARY](GLOSSARY.md)** — the meaning of each term in this skill. Read it before you use this skill.
 - **[python/codebase-design](python/codebase-design.md)** — one way to follow these rules in Python: a worked example of each layer and a test, and the tools to recommend to the user. Read it when you write or change Python code.
+- **[typescript/codebase-design](typescript/codebase-design.md)** — one way to follow these rules in TypeScript: a worked example of each layer and a test, and the tools to recommend to the user. Read it when you write or change TypeScript code.
 
 ## Layers
 
