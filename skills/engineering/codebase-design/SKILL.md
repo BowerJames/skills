@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: The user's prescribed style to design, write, change and test code so that a human can read, verify and change code that an agent wrote. Use when the user wants to design or implement changes in the codebase.
+description: The user's prescribed style for code that a human can find, understand and verify without having written it — immutable domain data, pure functions, self-contained components that take each dependency as one callable, wiring that connects them, and entrypoints at the framework edge. Use when you design, write, change, refactor or test code, decide where code goes, wire dependencies, or add a domain type, pure function, component, wiring or entrypoint.
 ---
 
 # Codebase Design
