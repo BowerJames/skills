@@ -18,7 +18,7 @@ This skill makes code easy for a human to read and to keep reading as it changes
 5. **Small code.** The code that a reader must understand is small.
 6. **Small change.** The change that a reader must verify is small and local.
 
-The user prescribes the style in this skill. Thus the style in this skill is the style that the user knows. Use the structures, names and idioms in this skill and its files. Use each term with the meaning in the glossary. Do not use a different structure or a new term when this skill gives one.
+The user prescribes the style in this skill. Thus the style in this skill is the style that the user knows. Use the structures, names and idioms in this skill and its files. Use each term with the meaning in the [glossary](GLOSSARY.md). Do not use a different structure or a new term when this skill gives one.
 
 After a change, the code must look as if it was designed for the current intent from the start. Change existing code when the intent requires it. Remove code that the intent no longer requires.
 
@@ -27,6 +27,10 @@ Do refactors and behaviour changes as separate steps. A refactor does not change
 Get flexibility from structure. Do not write code for a change that nobody has asked for.
 
 When a choice makes code easier to write but harder to read, choose the easier read.
+
+## Files
+
+- **[GLOSSARY](GLOSSARY.md)** — the meaning of each term in this skill. Read it before you use this skill.
 
 ## Layers
 

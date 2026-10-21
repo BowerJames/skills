@@ -1,6 +1,6 @@
 # Glossary
 
-This file defines the terms in this skill. Use each term only with the meaning in this file.
+This file defines the terms in [codebase-design](SKILL.md). Use each term only with the meaning in this file.
 
 **Behaviour.** What code does that a test can see: the values it returns, the errors it raises, and the calls it makes to its dependencies.
 
