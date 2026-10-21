@@ -97,8 +97,8 @@ A component holds behaviour. Its constructor takes configuration and dependencie
   **Understand:** The constructor shows each thing that the component uses, and nothing more. **Verify:** A test gives each dependency a simple fake. **Small change:** The wiring can give any callable of the correct type, for example a different component or a decorator.
 - A component must not assume that two of its dependencies share state.
   **Understand:** The reader can understand each dependency alone. **Small change:** The wiring can get each dependency from a different source.
-- Configuration changes the behaviour of a component without a change to its implementation. The types of the component must show each behaviour that its configuration can give.
-  **Small change:** New behaviour can come from new configuration, not new code. **Understand:** The reader can see all the possible behaviours from the types, without reading the implementation.
+- Configuration changes the behaviour of a component without a change to its implementation. The type of the configuration allows only the values that the component supports.
+  **Small change:** To use a different value of the configuration is a change to the wiring only. **Understand:** The reader can see all the possible behaviours from the types, without reading the implementation.
 
 ## Wiring
 
