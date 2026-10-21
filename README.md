@@ -10,6 +10,12 @@ My personal AI coding agent skills, following the [Agent Skills](https://agentsk
   - **[GLOSSARY](skills/engineering/codebase-design/GLOSSARY.md)** — the meaning of each term the skill uses.
   - Worked examples in **[Python](skills/engineering/codebase-design/python/codebase-design.md)** and **[TypeScript](skills/engineering/codebase-design/typescript/codebase-design.md)**, with the tools to recommend.
 
+### Philosophy
+
+- **[pattern-language](skills/philosophy/pattern-language/SKILL.md)** — a living pattern language for agent-written code that a human must still navigate: strict at the skeleton, free in the flesh, with a change protocol, exceptions as evidence, structural reports, calibration check-ins with the human, and patterns that evolve from experience.
+  - **[PATTERNS](skills/philosophy/pattern-language/PATTERNS.md)** — the seed patterns, with confidence ratings and per-language notes.
+  - **[MEASURING](skills/philosophy/pattern-language/MEASURING.md)** — how to measure findability and changeability without blocking growth.
+
 ### Utils
 
 - **[repo-explorer](skills/utils/repo-explorer/SKILL.md)** — explore codebases without cluttering the workspace, via a `/tmp/repos/` cache.
@@ -38,7 +44,7 @@ Installs are project-level by default and recorded in `skills-lock.json` (restor
 
 ```bash
 git clone https://github.com/BowerJames/skills.git
-cp -r skills/engineering/* skills/utils/* ~/.pi/agent/skills/    # pi
+cp -r skills/engineering/* skills/philosophy/* skills/utils/* ~/.pi/agent/skills/    # pi
 ```
 
 | Agent | Skills directory |
