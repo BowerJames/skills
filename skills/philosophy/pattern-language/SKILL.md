@@ -93,7 +93,7 @@ Git history is the log. Each change to the language is its own small commit, so 
 
 ## Using the language
 
-- **Apply the patterns during your work.** Try to plan your work with the relevant patterns in mind. Inside what a pattern governs, you are free to code however you wish. **Find, Align.**
+- **Apply the patterns during your work.** Try to plan your work with the relevant patterns in mind. Within the bounds the patterns set, write the code however you judge best. Where you believe breaking a pattern gives better code, break it and mark an exception. **Find, Align.**
 - **The language is the authority, not the code.** Existing code is a template only where it follows the patterns. Code that merely sits nearby, follows a proposed or deprecated pattern, or carries an exception is not a template.
 - **When patterns make a change impossible or convoluted.** This is evidence the patterns may need updating or a new pattern is required. Do not dogmatically force a solution. Mark an exception, then continue and raise the it with the human developer once you have completed your work. **Learn.**
 
@@ -173,4 +173,4 @@ Each mismatch is a gap. Decide what kind and recover:
 
 ## Keeping it cheap
 
-The language grows out of the work, not alongside it. Proposals, questions and check-ins ride on the report; never stop a task to hold one. Ask at most three questions at a time. If the human is not engaging with the language, ask less, not more. **Change:** a process that costs more than the code it protects gets skipped.
+The language grows out of the work, not alongside it. Proposals, questions and check-ins ride on the report; never stop a task to hold one. Ask at most three questions at a time. If the human is not engaging with the language, ask less, not more. A process that costs more than the code it protects gets skipped.
