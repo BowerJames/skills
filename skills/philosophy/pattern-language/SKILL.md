@@ -55,6 +55,7 @@ Situations identified from experience for which the pattern is unsuitable.
 ## Related Patterns
 ↑ [Larger Name](larger.md)
 ↓ [Smaller Name](smaller.md)
+→ Replaced by [New Name](new-name.md)   (only when deprecated, and only if something replaces it)
 ```
 
 Keep each pattern short. If a pattern needs a page, it is probably two patterns.
@@ -65,7 +66,7 @@ Every pattern carries a status:
 |---|---|
 | Trial | Agreed with the human to try out. Apply it where it fits and note how it goes. |
 | Accepted | The project lives by it. Break it only with an exception. |
-| Deprecated | The project is moving away from it. Code that follows it is not a template; move that code to what replaces it when you change it anyway. |
+| Deprecated | The project is moving away from it. Code that follows it is not a template; move that code to what replaces it, if anything, when you change it anyway. |
 
 **Align:** the patterns are owned by you and the human. You should not edit accepted ones or promote patterns to accepted without their approval.
 
@@ -114,7 +115,14 @@ Keep the marker exact: one search finds every exception, and the name leads to t
 
 **A new project.** Start with an empty `pattern-language/`. Review the [seeds/](seeds/) patterns for the projects chosen language. These are preconfigured patterns that have been approved in other projects and can be a good starting point. Talk each one through with the human and give them the choice to add each one as a trial pattern to the language.
 
-**An existing project.** The language already exists, unwritten, in the code and in the human's head. Draw it out. Look for structural shapes the code repeats consistently, pick the strongest few and discuss them with the human with where you saw them and where they are broken. Work with the human to accept, revise or reject them as trial patterns, at most three at a time. If you find contradictory patterns work with the human to decide how it should be handled. **Learn, Align.**
+**An existing project.** The language already exists, unwritten, in the code and in the human's head. Draw it out as you work, starting with the part of the code your task touches rather than surveying everything at once, and ask the human what they wish every agent did consistently. For each shape the code repeats, show the human where it appears and where it is broken, at most three at a time, and decide together:
+
+- **Accept** it if it is what the human intends. The existing code is its trial.
+- **Trial** it if the human likes it but is not sure it works here.
+- **Deprecate** it if it is an accident or legacy the human wants to move away from, so that it stops being copied.
+- **Drop** it if it is not worth recording.
+
+When two shapes solve the same problem, the human picks one, and the other is deprecated. **Learn, Align.**
 
 ### Growing
 
