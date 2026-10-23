@@ -12,9 +12,8 @@ My personal AI coding agent skills, following the [Agent Skills](https://agentsk
 
 ### Philosophy
 
-- **[pattern-language](skills/philosophy/pattern-language/SKILL.md)** — a living pattern language for agent-written code that a human must still navigate: strict at the skeleton, free in the flesh, with a change protocol, exceptions as evidence, structural reports, calibration check-ins with the human, and patterns that evolve from experience.
-  - **[seeds](skills/philosophy/pattern-language/seeds/README.md)** — starting patterns to offer a project, one file per seed.
-  - **[MEASURING](skills/philosophy/pattern-language/MEASURING.md)** — how to measure findability and changeability without blocking growth.
+- **[pattern-language](skills/philosophy/pattern-language/SKILL.md)** — how to grow, use and review a project's pattern language together with the human developer, so that standards and intent outlive any one agent session: patterns in a `pattern-language/` folder, discussed before they are written, trialled before they are accepted, with exceptions as evidence and check-ins with the human.
+  - **[seeds](skills/philosophy/pattern-language/seeds/README.md)** — starting patterns to offer a new project.
 
 ### Utils
 
