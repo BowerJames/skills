@@ -30,6 +30,7 @@ A pattern names a recurring problem, the forces in tension, and an outcome that 
 ```
 ---
 status: trial | accepted | deprecated
+summary: Brief summary of the pattern and the context it should be used. Cannot contain `:` as this will break parsing.
 ---
 
 # <Name>
@@ -93,6 +94,13 @@ Git history is the log. Each change to the language is its own small commit, so 
 
 ## Using the language
 
+- **Start with an overview.** Before you plan a task, list the whole language with one command:
+
+  ```bash
+  grep -H -E "^(status|summary):" pattern-language/*.md
+  ```
+
+  Use an equivalent where `grep` is not available. The summaries tell you which patterns the task touches; read each of those in full before you rely on it, because the summary leaves out its forces and its "not when". **Find, Align.**
 - **Apply the patterns during your work.** Try to plan your work with the relevant patterns in mind. Within the bounds the patterns set, write the code however you judge best. Where you believe breaking a pattern gives better code, break it and mark an exception. **Find, Align.**
 - **The language is the authority, not the code.** Existing code is a template only where it follows the patterns. Code that merely sits nearby, follows no pattern or deprecated pattern, or carries an exception is not a template.
 - **When patterns make a change impossible or convoluted.** This is evidence the patterns may need updating or a new pattern is required. Do not dogmatically force a solution. Mark an exception, then continue and raise the it with the human developer once you have completed your work. **Learn.**
