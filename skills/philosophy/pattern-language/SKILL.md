@@ -9,7 +9,7 @@ description: How to grow, use and review a project's pattern language together w
 
 Coding agents have written most of the code. The human stays in the loop but cannot read all of it. They still need to find what they are after quickly when it matters, understand what they find and trust the changes you make are aligned with their intentions.
 
-The human is there every step of the way adn provides the vision, coding agents maintain context only as long as there session is active. They need to be be consistent and be able to retain knowledge of standard and what is important across session.
+The human is there every step of the way and provides the vision, coding agents maintain context only as long as their session is active. They need to be consistent and be able to retain knowledge of standard and what is important across session.
 
 A pattern language makes that possible. In Christopher Alexander's sense, it is a small network of patterns, each solving one recurring problem at one scale, that the people building something share. When the human and coding agents share the project's language, the human can predict code they have never read and communicate accurately with you about what they want.The ai can see the patterns and expectations that have been set in previous sessions. Both stand to gain from the language.
 
@@ -29,7 +29,7 @@ A pattern names a recurring problem, the forces in tension, and an outcome that 
 
 ```
 ---
-status: proposed | accepted | deprecated
+status: trial | accepted | deprecated
 ---
 
 # <Name>
@@ -50,7 +50,6 @@ The core instruction, structural arrangement, or behavioral rule that resolves t
 What the environment looks like after applying the pattern. This includes the benefits gained, any new problems or sub-problems introduced, and the new baseline state ready for the next layer of patterns.
 
 ## Not When
-
 Situations identified from experience for which the pattern is unsuitable.
 
 ## Related Patterns
@@ -62,11 +61,11 @@ Keep each pattern short. If a pattern needs a page, it is probably two patterns.
 
 Every pattern carries a status:
 
-| Status | Meaning | Who sets it |
-|---|---|---|
-| Proposed | A hypothesis. Apply it where it fits and report how it went. | You |
-| Accepted | The project lives by it. Break it only with an exception. | The human |
-| Deprecated | The project is moving away from it. Code that follows it is not a template; move that code to what replaces it when you change it anyway. | The human |
+| Status | Meaning |
+|---|---|
+| Trial | Agreed with the human to try out. Apply it where it fits and note how it goes. |
+| Accepted | The project lives by it. Break it only with an exception. |
+| Deprecated | The project is moving away from it. Code that follows it is not a template; move that code to what replaces it when you change it anyway. |
 
 **Align:** the patterns are owned by you and the human. You should not edit accepted ones or promote patterns to accepted without their approval.
 
@@ -94,7 +93,7 @@ Git history is the log. Each change to the language is its own small commit, so 
 ## Using the language
 
 - **Apply the patterns during your work.** Try to plan your work with the relevant patterns in mind. Within the bounds the patterns set, write the code however you judge best. Where you believe breaking a pattern gives better code, break it and mark an exception. **Find, Align.**
-- **The language is the authority, not the code.** Existing code is a template only where it follows the patterns. Code that merely sits nearby, follows a proposed or deprecated pattern, or carries an exception is not a template.
+- **The language is the authority, not the code.** Existing code is a template only where it follows the patterns. Code that merely sits nearby, follows no pattern or deprecated pattern, or carries an exception is not a template.
 - **When patterns make a change impossible or convoluted.** This is evidence the patterns may need updating or a new pattern is required. Do not dogmatically force a solution. Mark an exception, then continue and raise the it with the human developer once you have completed your work. **Learn.**
 
 ### Exceptions
@@ -113,9 +112,9 @@ Keep the marker exact: one search finds every exception, and the name leads to t
 
 ### Starting
 
-**A new project.** Start with an empty `pattern-language/`. Review the [seeds/](seeds/) patterns for the projects chosen language. These are preconfigured patterns that have been approved in other projects and can be a good starting point. Talk each one through with the human and give them the choice to add each one as a proposed starting pattern to the language.
+**A new project.** Start with an empty `pattern-language/`. Review the [seeds/](seeds/) patterns for the projects chosen language. These are preconfigured patterns that have been approved in other projects and can be a good starting point. Talk each one through with the human and give them the choice to add each one as a trial pattern to the language.
 
-**An existing project.** The language already exists, unwritten, in the code and in the human's head. Draw it out. Look for structural shapes the code repeats consistently, pick the strongest few and discuss them with the human with where you saw them and where they are broken. Work with the human to accept, revise or reject them as proposed patterns, at most three at a time. If you find contradictory patterns work with the human to decide which is the gold standard. **Learn, Align.**
+**An existing project.** The language already exists, unwritten, in the code and in the human's head. Draw it out. Look for structural shapes the code repeats consistently, pick the strongest few and discuss them with the human with where you saw them and where they are broken. Work with the human to accept, revise or reject them as trial patterns, at most three at a time. If you find contradictory patterns work with the human to decide how it should be handled. **Learn, Align.**
 
 ### Growing
 
@@ -126,7 +125,7 @@ Patterns come from evidence, not from taste. You should discus a pattern with th
 - the human tells you how they want something done **Align.**
 - a check-in shows a gap that a pattern would have prevented **Find, Learn.**
 
-A pattern can discussed to be changed when:
+A pattern can be discussed to be changed when:
 
 - its exceptions cluster around one reason.
 - two patterns pull in opposite directions in the same place.
@@ -134,7 +133,9 @@ A pattern can discussed to be changed when:
 
 Suggest accepting or deprecating a pattern with the evidence: how often it was applied, how often it was broken, and why. Do not add a pattern to work around a bad one. Fix the bad one or deprecate it.
 
-When the human rejects a proposed pattern, delete its file and give their reason in the commit message. Delete a deprecated pattern once no code follows it. **Learn.**
+When the human rejects a trial pattern, delete its file and give their reason in the commit message. Delete a deprecated pattern once no code follows it. **Learn.**
+
+Always discuss a paatern with the human before writing it down **Align.**
 
 ## Reviewing the language
 
@@ -142,7 +143,7 @@ A language only one party knows is not shared. You cannot see what the human kno
 
 ### The language report
 
-End each task that touched the code with a short report. Leave out lines with nothing in them.
+End each task that touched the code with a short report after your normal response. Leave out lines with nothing in them.
 
 ```
 Exceptions   – <pattern> at <location>: <reason>
