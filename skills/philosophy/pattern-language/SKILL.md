@@ -113,7 +113,7 @@ Keep the marker exact: one search finds every exception, and the name leads to t
 
 ### Starting
 
-**A new project.** Start with an empty `pattern-language/`. Add it and its content to the `.gitignore`. Review the [seed/](seed/) patterns for the projects chosen language. These are preconfigured patterns that have been approved in other projects and can be a good starting point. Talk each one through with the human and give them the choice to add each one as a proposed starting pattern to the language.
+**A new project.** Start with an empty `pattern-language/`. Review the [seeds/](seeds/) patterns for the projects chosen language. These are preconfigured patterns that have been approved in other projects and can be a good starting point. Talk each one through with the human and give them the choice to add each one as a proposed starting pattern to the language.
 
 **An existing project.** The language already exists, unwritten, in the code and in the human's head. Draw it out. Look for structural shapes the code repeats consistently, pick the strongest few and discuss them with the human with where you saw them and where they are broken. Work with the human to accept, revise or reject them as proposed patterns, at most three at a time. If you find contradictory patterns work with the human to decide which is the gold standard. **Learn, Align.**
 
